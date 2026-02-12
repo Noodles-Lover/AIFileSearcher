@@ -36,10 +36,14 @@ const Settings: React.FC = () => {
                   <Text strong>搜索范围</Text><br/>
                   <Text type="secondary" size="small">决定搜索时包含哪些区域</Text>
                 </div>
-                <Select defaultValue="indexed" style={{ width: 180 }}>
-                  <option value="all">全盘搜索</option>
-                  <option value="indexed">仅限已索引文件夹</option>
-                </Select>
+                <Select 
+                  defaultValue="indexed" 
+                  style={{ width: 180 }}
+                  options={[
+                    { value: 'all', label: '全盘搜索' },
+                    { value: 'indexed', label: '仅限已索引文件夹' },
+                  ]}
+                />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

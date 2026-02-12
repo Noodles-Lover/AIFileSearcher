@@ -1,7 +1,28 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button, Table, Space, Layout, Typography, message, Tag } from 'antd';
-import { SearchOutlined, FolderOpenOutlined, SettingOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown } from 'antd';
+import { 
+  SearchOutlined, 
+  FolderOpenOutlined, 
+  SettingOutlined, 
+  FileOutlined,
+  FolderFilled,
+  MoreOutlined,
+  GlobalOutlined
+} from '@ant-design/icons';
+import { 
+  FileIcon as LucideFile, 
+  Folder, 
+  FileImage, 
+  FileVideo, 
+  FileAudio, 
+  FileText, 
+  FileArchive, 
+  FileCode, 
+  FileSpreadsheet, 
+  FileBox,
+  FileSearch
+} from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Header, Content } = Layout;
@@ -12,8 +33,73 @@ interface FileItem {
   name: string;
   path: string;
   size: string;
+  size_bytes: number;
   modified: string;
+  created: string;
+  extension: string;
+  type: 'file' | 'folder';
 }
+
+const FileIcon: React.FC<{ record: FileItem }> = ({ record }) => {
+  const [iconError, setIconError] = React.useState(false);
+  
+  // 生成圖標請求 URL
+  const iconUrl = `http://localhost:8000/api/icon?path=${encodeURIComponent(record.path)}`;
+
+  if (!iconError) {
+    return (
+      <img 
+        src={iconUrl} 
+        alt="" 
+        style={{ width: 18, height: 18, objectFit: 'contain' }}
+        onError={() => setIconError(true)}
+      />
+    );
+  }
+
+  // 如果系統圖標加載失敗，退回到 Lucide 圖標
+  if (record.type === 'folder') {
+    return <Folder size={18} color="#ffca28" fill="#ffca28" />;
+  }
+
+  const ext = (record.extension || '').toLowerCase();
+  
+  // 图片
+  if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'].includes(ext)) {
+    return <FileImage size={18} color="#52c41a" />;
+  }
+  
+  // 视频
+  if (['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv'].includes(ext)) {
+    return <FileVideo size={18} color="#722ed1" />;
+  }
+  
+  // 音频
+  if (['.mp3', '.wav', '.flac', '.ogg', '.m4a'].includes(ext)) {
+    return <FileAudio size={18} color="#fa8c16" />;
+  }
+  
+  // 文档
+  if (['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
+    return <FileSpreadsheet size={18} color="#1890ff" />;
+  }
+  
+  if (['.md', '.txt'].includes(ext)) {
+    return <FileText size={18} color="#8c8c8c" />;
+  }
+  
+  // 压缩包
+  if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(ext)) {
+    return <FileArchive size={18} color="#faad14" />;
+  }
+  
+  // 代码
+  if (['.js', '.ts', '.tsx', '.jsx', '.py', '.java', '.cpp', '.h', '.html', '.css', '.json', '.sh', '.bat', '.ps1'].includes(ext)) {
+    return <FileCode size={18} color="#1890ff" />;
+  }
+
+  return <LucideFile size={18} color="#8c8c8c" />;
+};
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -25,48 +111,65 @@ const Home: React.FC = () => {
   const performSearch = async (query: string, path: string | null) => {
     setLoading(true);
     try {
-      // 构建 URL参数
       const params = new URLSearchParams();
       if (query) params.append('q', query);
       if (path) params.append('parent_path', path);
       
-      // 如果既没有查询词也没有路径，默认显示什么都不做，或者显示根目录？
-      // 这里为了体验，如果没有 query 但有 path，就列出 path 下的所有文件
       let url = `http://localhost:8000/api/search?${params.toString()}`;
       
-      // 如果只是列出文件夹内容（没有搜索词），可以使用 list 接口，或者让 search 接口处理空 query
-      // Everything 如果 query 为空，search 接口可能报错，所以如果是纯浏览模式：
       if (!query && path) {
          url = `http://localhost:8000/api/list?path=${encodeURIComponent(path)}`;
       } else if (!query && !path) {
-         // 什么都不做
          setLoading(false);
          return;
       }
 
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || '搜索失败');
+      }
       
       const mappedFiles = data.results.map((item: any, index: number) => ({
         key: index.toString(),
         name: item.name,
         path: item.path,
         size: item.size,
-        modified: item.modified
+        size_bytes: item.size_bytes,
+        modified: item.modified,
+        created: item.created,
+        extension: item.extension,
+        type: item.type
       }));
       
       setFiles(mappedFiles);
       if (mappedFiles.length === 0) {
         message.info('未找到匹配的文件');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search failed:', error);
-      message.error('搜索失败，请确保后端服务已启动');
+      message.error(error.message || '搜索失败，请确保后端服务已启动');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenFile = async (path: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/open-file?path=${encodeURIComponent(path)}`);
+      if (!response.ok) throw new Error('Failed to open file');
+    } catch (error) {
+      message.error('无法打开文件');
+    }
+  };
+
+  const handleOpenFolder = async (path: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/open-folder?path=${encodeURIComponent(path)}`);
+      if (!response.ok) throw new Error('Failed to open folder');
+    } catch (error) {
+      message.error('无法在资源管理器中打开');
     }
   };
 
@@ -86,8 +189,7 @@ const Home: React.FC = () => {
       if (!data.cancelled && data.path) {
         setCurrentPath(data.path);
         message.success(`当前范围: ${data.path}`);
-        // 自动列出该文件夹内容
-        setSearchQuery(''); // 清空搜索词，变为浏览模式
+        setSearchQuery('');
         performSearch('', data.path);
       }
     } catch (error) {
@@ -98,30 +200,43 @@ const Home: React.FC = () => {
 
   const clearPath = () => {
     setCurrentPath(null);
-    setFiles([]); // 清空列表
+    setFiles([]);
     message.info('已切换回全盘搜索模式');
+  };
+
+  const copyToClipboard = (text: string) => {
+    // 接口占位，目前不执行任何操作
+    console.log('Copy path requested for:', text);
   };
 
   const columns: ColumnsType<FileItem> = [
     {
-      title: '文件名',
+      title: '名称',
       dataIndex: 'name',
       key: 'name',
-      render: (text) => <Text strong color="primary">{text}</Text>,
+      ellipsis: true,
+      width: '40%',
+      render: (text, record) => (
+        <Space onClick={() => handleOpenFile(record.path)} style={{ cursor: 'pointer' }}>
+          <FileIcon record={record} />
+          <Text strong>{text}</Text>
+        </Space>
+      ),
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: '路径',
+      title: '位置',
       dataIndex: 'path',
       key: 'path',
-      render: (text) => <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>,
-    },
-    {
-      title: '修改时间',
-      dataIndex: 'modified',
-      key: 'modified',
-      width: 180,
-      render: (text) => <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>,
+      ellipsis: true,
+      render: (text) => (
+        <Text 
+          type="secondary" 
+          style={{ fontSize: '12px' }}
+        >
+          {text}
+        </Text>
+      ),
     },
     {
       title: '大小',
@@ -129,11 +244,50 @@ const Home: React.FC = () => {
       key: 'size',
       width: 120,
       align: 'right',
+      render: (text, record) => record.type === 'folder' ? '-' : (text === '0.00 B' ? '-' : text),
+      sorter: (a, b) => a.size_bytes - b.size_bytes,
+    },
+    {
+      title: '修改时间',
+      dataIndex: 'modified',
+      key: 'modified',
+      width: 180,
+      render: (text) => <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>,
+      sorter: (a, b) => a.modified.localeCompare(b.modified),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      align: 'center',
+      render: (_, record) => (
+        <Dropdown
+          menu={{
+            items: [
+              {
+                key: 'open',
+                label: '打开',
+                icon: <FileOutlined />,
+                onClick: () => handleOpenFile(record.path)
+              },
+              {
+                key: 'explorer',
+                label: '在资源管理器中打开',
+                icon: <FolderOpenOutlined />,
+                onClick: () => handleOpenFolder(record.path)
+              }
+            ]
+          }}
+          trigger={['click']}
+        >
+          <Button type="text" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
+        </Dropdown>
+      ),
     },
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#fff' }}>
+    <Layout style={{ height: '100vh', background: '#fff', overflow: 'hidden' }}>
       <Header style={{ 
         background: '#fff', 
         padding: '0 24px', 
@@ -141,17 +295,23 @@ const Home: React.FC = () => {
         alignItems: 'center', 
         justifyContent: 'space-between',
         borderBottom: '1px solid #f0f0f0',
-        height: '64px'
+        height: '64px',
+        flexShrink: 0,
+        zIndex: 1,
+        width: '100%'
       }}>
-        <Space size="middle" style={{ flex: 1, maxWidth: '600px' }}>
+        <Space size="middle" style={{ flex: 1, maxWidth: '800px' }}>
           <Input 
             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-            placeholder={currentPath ? `在 ${currentPath.split('\\').pop()} 中搜索...` : "搜索本地文件..."}
+            placeholder={currentPath ? `在 ${currentPath.split('\\').pop()} 中搜索...` : "搜索本地文件 (Everything)..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onPressEnter={handleSearch}
             size="large"
             allowClear
+            suffix={
+              !currentPath && <Tooltip title="正在使用全盘搜索"><GlobalOutlined style={{ color: '#1890ff' }} /></Tooltip>
+            }
           />
           <Button type="primary" size="large" onClick={handleSearch} loading={loading}>
             搜索
@@ -164,12 +324,14 @@ const Home: React.FC = () => {
               closable 
               onClose={clearPath} 
               color="blue" 
-              style={{ padding: '4px 10px', fontSize: '14px' }}
+              style={{ padding: '4px 10px', fontSize: '13px', borderRadius: '4px' }}
             >
-              范围: {currentPath.length > 20 ? '...' + currentPath.slice(-20) : currentPath}
+              范围: {currentPath.length > 30 ? '...' + currentPath.slice(-30) : currentPath}
             </Tag>
           )}
-          <Button icon={<FolderOpenOutlined />} onClick={handlePickFolder}>上传文件夹</Button>
+          <Tooltip title="指定文件夹范围">
+            <Button icon={<FolderOpenOutlined />} onClick={handlePickFolder}>限制范围</Button>
+          </Tooltip>
           <Button 
             type="text" 
             icon={<SettingOutlined style={{ fontSize: '18px' }} />} 
@@ -178,17 +340,28 @@ const Home: React.FC = () => {
         </Space>
       </Header>
 
-      <Content style={{ padding: '24px' }}>
+      <Content style={{ flex: 1, background: '#fff', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <Table 
           columns={columns} 
           dataSource={files} 
           loading={loading}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            defaultPageSize: 50, 
+            showSizeChanger: true, 
+            pageSizeOptions: ['20', '50', '100', '200'],
+            showTotal: (total) => `共 ${total} 个项目`,
+            size: 'small',
+            style: { margin: '12px 16px' }
+          }}
           size="middle"
+          scroll={{ y: 'calc(100vh - 64px - 55px - 56px)' }} // 64(header) + 55(table head) + 56(pagination)
           onRow={(record) => ({
-            onClick: () => console.log('Clicked row:', record),
-            style: { cursor: 'pointer' }
+            onDoubleClick: () => handleOpenFile(record.path),
           })}
+          locale={{
+            emptyText: searchQuery || currentPath ? '没有找到匹配项' : '请输入关键词开始搜索'
+          }}
+          style={{ flex: 1 }}
         />
       </Content>
     </Layout>

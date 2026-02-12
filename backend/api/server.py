@@ -1,16 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 import os
-
-# 确保能导入 everything 模块
-# 如果直接运行此脚本，sys.path 需要包含 backend 目录
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-
+import subprocess
+import base64
 from api.everything import EverythingClient
+from api.icons import icon_manager
 
 app = FastAPI(title="AI File Searcher API")
 
@@ -30,30 +26,42 @@ client = EverythingClient()
 def read_root():
     return {"status": "ok", "message": "AI File Searcher Backend is running"}
 
-import subprocess
 
-# ... (imports)
-
-@app.get("/api/search")
-def search_files(q: str, count: int = 100, parent_path: str = None):
+@app.get("/api/icon")
+async def get_icon(path: str):
     """
-    搜索文件
-    :param q: 搜索关键词
-    :param count: 返回结果数量
-    :param parent_path: 限制在指定文件夹内搜索
+    獲取系統圖標
     """
     try:
-        # 如果指定了父目录，修改查询语句
-        final_query = q
-        if parent_path:
-            # Everything 语法: <query> parent:<path>
-            # 注意路径如果有空格需要引号
-            final_query = f'{q} parent:"{parent_path}"'
-            
-        results = client.search(final_query, count=count)
-        return {"results": results}
+        base64_data = icon_manager.get_icon_base64(path)
+        if not base64_data:
+            raise HTTPException(status_code=404, detail="Icon not found")
+        
+        # 解碼 base64 並返回圖片流
+        img_data = base64.b64decode(base64_data)
+        return Response(content=img_data, media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/search")
+def search_files(q: str = "", count: int = 100, parent_path: str = None):
+    """
+    搜索文件
+    """
+    query = q
+    if parent_path:
+        # 如果提供了父目錄，限制在該目錄下搜索
+        query = f'parent:"{parent_path}" {q}'.strip()
+    
+    results = client.search(query, count=count)
+    
+    if results == "CONNECTION_ERROR":
+         raise HTTPException(
+             status_code=503, 
+             detail="無法連接到 Everything 伺服器。請確保 Everything 正在運行並已啟用 HTTP 伺服器（工具 -> 選項 -> HTTP 伺服器）。"
+         )
+        
+    return {"results": results}
 
 @app.get("/api/pick-folder")
 def pick_folder():
@@ -89,19 +97,50 @@ def pick_folder():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/list")
-# ... (rest of the file)
-def list_files(path: str, recursive: bool = False):
+@app.get("/api/open-file")
+def open_file(path: str):
     """
-    列出指定文件夹下的文件
-    :param path: 文件夹路径
-    :param recursive: 是否递归
+    使用系统默认程序打开文件或文件夹
     """
     try:
-        results = client.get_files_in_folder(path, recursive=recursive)
-        return {"results": results}
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="文件不存在")
+        
+        # 使用 os.startfile 在 Windows 上打开
+        os.startfile(path)
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/open-folder")
+def open_folder(path: str):
+    """
+    在资源管理器中定位并选中文件
+    """
+    try:
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="路径不存在")
+        
+        # 使用 explorer /select, 可以在资源管理器中打开并选中该文件/文件夹
+        subprocess.run(['explorer', '/select,', os.path.normpath(path)])
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/list")
+def list_files(path: str):
+    """
+    列出指定目錄下的文件
+    """
+    results = client.get_files_in_folder(path)
+    
+    if results == "CONNECTION_ERROR":
+        raise HTTPException(
+            status_code=503, 
+            detail="無法連接到 Everything 伺服器。請確保 Everything 正在運行並已啟用 HTTP 伺服器。"
+        )
+        
+    return {"results": results}
 
 if __name__ == "__main__":
     import uvicorn
