@@ -7,6 +7,7 @@ import subprocess
 import base64
 from api.everything import EverythingClient
 from api.icons import icon_manager
+from process.processor import ContentProcessor
 
 app = FastAPI(title="AI File Searcher API")
 
@@ -21,6 +22,7 @@ app.add_middleware(
 
 # 初始化 Everything 客户端
 client = EverythingClient()
+processor = ContentProcessor()
 
 @app.get("/")
 def read_root():
@@ -40,6 +42,43 @@ async def get_icon(path: str):
         # 解碼 base64 並返回圖片流
         img_data = base64.b64decode(base64_data)
         return Response(content=img_data, media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/preview")
+def preview_file(path: str):
+    """
+    預覽文件內容 (僅開發用)
+    """
+    try:
+        # 只讀取前 10 個 chunk
+        result = processor.process_file(path)
+        
+        if result.get("error"):
+            # 返回 200，前端判斷 error 字段
+            return {"error": result.get("error")}
+
+        chunks = result.get("chunks", [])
+        strategy = result.get("strategy", "Unknown")
+        
+        preview_content = f"Chunking Strategy: {strategy}\n"
+        preview_content += f"Total Chunks: {len(chunks)}\n\n"
+        
+        # Format first 10 chunks
+        formatted_chunks = []
+        for i, chunk in enumerate(chunks[:10]):
+            formatted_chunks.append(f"=== Chunk {i+1} ===\n{chunk}")
+            
+        preview_content += "\n\n==============\n\n".join(formatted_chunks)
+        
+        if len(chunks) > 10:
+            preview_content += "\n\n... (更多內容已省略)"
+
+        return {
+            "content": preview_content,
+            "meta": result.get("metadata", {}),
+            "type": result.get("type", "")
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

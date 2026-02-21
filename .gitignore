@@ -8,7 +8,7 @@ frontend/.env.*
 frontend/.eslintcache
 
 # Python / Backend
-backend/api/__pycache__/
+**/__pycache__/
 backend/*.py[cod]
 backend/*$py.class
 backend/.venv/

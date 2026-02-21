@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown } from 'antd';
+import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Modal, Spin } from 'antd';
 import { 
   SearchOutlined, 
   FolderOpenOutlined, 
@@ -8,7 +8,8 @@ import {
   FileOutlined,
   FolderFilled,
   MoreOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import { 
   FileIcon as LucideFile, 
@@ -107,6 +108,34 @@ const Home: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
+
+  // Preview State
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewTitle, setPreviewTitle] = useState('');
+
+  const handlePreview = async (record: FileItem) => {
+    setPreviewTitle(record.name);
+    setPreviewVisible(true);
+    setPreviewLoading(true);
+    setPreviewContent('');
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/preview?path=${encodeURIComponent(record.path)}`);
+      const data = await response.json();
+      
+      if (data.error) {
+        setPreviewContent(`Error: ${data.error}`);
+      } else {
+        setPreviewContent(data.content || '無內容');
+      }
+    } catch (error) {
+      setPreviewContent('Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const performSearch = async (query: string, path: string | null) => {
     setLoading(true);
@@ -271,6 +300,13 @@ const Home: React.FC = () => {
                 onClick: () => handleOpenFile(record.path)
               },
               {
+                key: 'preview',
+                label: '預覽',
+                icon: <EyeOutlined />,
+                onClick: () => handlePreview(record),
+                disabled: record.type === 'folder'
+              },
+              {
                 key: 'explorer',
                 label: '在资源管理器中打开',
                 icon: <FolderOpenOutlined />,
@@ -364,6 +400,33 @@ const Home: React.FC = () => {
           style={{ flex: 1 }}
         />
       </Content>
+
+      <Modal
+        title={`預覽: ${previewTitle}`}
+        open={previewVisible}
+        onCancel={() => setPreviewVisible(false)}
+        footer={null}
+        width={800}
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+      >
+        {previewLoading ? (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <Spin tip="加載中..." />
+          </div>
+        ) : (
+          <pre style={{ 
+            whiteSpace: 'pre-wrap', 
+            wordWrap: 'break-word',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            fontSize: '14px',
+            backgroundColor: '#f5f5f5',
+            padding: '12px',
+            borderRadius: '4px'
+          }}>
+            {previewContent}
+          </pre>
+        )}
+      </Modal>
     </Layout>
   );
 };
