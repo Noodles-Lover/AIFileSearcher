@@ -40,3 +40,6 @@ yarn-error.log*
 
 # Test Files
 testFiles/
+
+# Local Models
+models/
