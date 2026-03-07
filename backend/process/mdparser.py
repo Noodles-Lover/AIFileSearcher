@@ -1,17 +1,17 @@
 from pathlib import Path
 from typing import List
 from collections import defaultdict
-from .parser_base import BaseParser
+from .BaseParser import BaseParser
 
 class MDParser(BaseParser):
     """
-    Parser for Markdown files
+    Markdown 文件解析器
     """
     type = 'md'
     
     def _extract_content(self) -> str:
         """
-        Extract content from MD file
+        提取 Markdown 文件內容
         """
         try:
             with open(self.file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -22,7 +22,7 @@ class MDParser(BaseParser):
             return ""
 
     def _extract_metadata(self) -> defaultdict:
-        # TODO: Implement YAML frontmatter extraction if needed
+        # 待辦: 如果需要，實現 YAML frontmatter 提取
         return defaultdict(str)
 
     def _check_format(self) -> bool:

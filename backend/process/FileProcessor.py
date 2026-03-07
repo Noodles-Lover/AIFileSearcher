@@ -1,16 +1,16 @@
 import os
 from typing import List, Dict, Type, Optional
-from .parser_base import BaseParser
-from .txtparser import TXTParser
-from .pdfparser import PDFParser
-from .docxparser import DocxParser
-from .pptxparser import PPTParser
-from .mdparser import MDParser
-from .chunking import ChunkingStrategy, FixedSizeChunking, ParagraphChunking, SentenceChunking
+from .BaseParser import BaseParser
+from .TXTParser import TXTParser
+from .PDFParser import PDFParser
+from .DocxParser import DocxParser
+from .PPTParser import PPTParser
+from .MDParser import MDParser
+from .ChunkingStrategy import ChunkingStrategy, FixedSizeChunking, ParagraphChunking, SentenceChunking
 
-class ContentProcessor:
+class FileProcessor:
     """
-    內容處理器 (ContentProcessor)
+    文件處理器 (FileProcessor)
     負責調度具體的 Parser 和 ChunkingStrategy
     """
     

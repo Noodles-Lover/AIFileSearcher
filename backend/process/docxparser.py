@@ -2,17 +2,17 @@ from pathlib import Path
 from typing import List
 from collections import defaultdict
 import docx
-from .parser_base import BaseParser
+from .BaseParser import BaseParser
 
 class DocxParser(BaseParser):
     """
-    Parser for DOCX files
+    DOCX 文件解析器
     """
     type = 'docx'
     
     def _extract_content(self) -> str:
         """
-        Extract content from DOCX file using python-docx
+        使用 python-docx 提取 DOCX 文件內容
         """
         try:
             doc = docx.Document(self.file_path)

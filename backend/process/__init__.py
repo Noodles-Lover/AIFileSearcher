@@ -1,11 +1,12 @@
 from pathlib import Path
 from typing import Any, List
-from .parser_base import BaseParser
-from .pdfparser import PDFParser
-from .docxparser import DocxParser
-from .pptxparser import PPTParser
-from .mdparser import MDParser
-from .txtparser import TXTParser
+from .BaseParser import BaseParser
+from .PDFParser import PDFParser
+from .DocxParser import DocxParser
+from .PPTParser import PPTParser
+from .MDParser import MDParser
+from .TXTParser import TXTParser
+from .FileProcessor import FileProcessor
 
 parsers: List[BaseParser] = [PDFParser, TXTParser, DocxParser, PPTParser, MDParser]
 

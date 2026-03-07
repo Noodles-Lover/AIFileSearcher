@@ -4,19 +4,19 @@ from collections import defaultdict
 import sys
 import os
 
-from .parser_base import BaseParser
+from .BaseParser import BaseParser
 
 class TXTParser(BaseParser):
     """
-    Parser for txt files
+    TXT 文件解析器
     """
     type = 'txt'
     
     def _extract_content(self) -> str:
         """
-        Extract content from TXT file
+        提取 TXT 文件內容
         """
-        # Ignore errors from opening 'utf-16' files
+        # 忽略 'utf-16' 文件打開錯誤
         try:
             with open(self.file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 raw_text = f.read()

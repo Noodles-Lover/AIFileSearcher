@@ -2,22 +2,22 @@ from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
 import fitz
-from .parser_base import BaseParser
+from .BaseParser import BaseParser
 
 class PDFParser(BaseParser):
     """
-    Parser for PDF files
+    PDF 文件解析器
     """
     type = 'pdf'
     
     def _extract_content(self) -> str:
         """
-        Extract content from PDF file using PyMuPDF (fitz)
+        使用 PyMuPDF (fitz) 提取 PDF 文件內容
         """
         try:
             pdf_doc: fitz.Document = fitz.open(self.file_path)
             if pdf_doc.needs_pass:
-                # If PDF is password protected, skip
+                # 如果 PDF 有密碼保護，跳過
                 pdf_doc.close()
                 return ""
             
