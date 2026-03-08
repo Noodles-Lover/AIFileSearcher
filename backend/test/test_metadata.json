@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1,
+    "content": "蘋果是一種水果",
+    "category": "fruit"
+  },
+  {
+    "id": 2,
+    "content": "香蕉也是水果",
+    "category": "fruit"
+  },
+  {
+    "id": 3,
+    "content": "Python 是編程語言",
+    "category": "tech"
+  },
+  {
+    "id": 4,
+    "content": "Java 和 C++ 常用於後端開發",
+    "category": "tech"
+  },
+  {
+    "id": 5,
+    "content": "今天天氣真好",
+    "category": "daily"
+  }
+]
