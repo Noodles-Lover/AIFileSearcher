@@ -1,5 +1,17 @@
+import sys
+import os
+import time
+
+# 确保项目根目录在路径中
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(current_dir)
+project_root = os.path.dirname(backend_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 from fastapi import APIRouter, HTTPException, Query
 from api.everything import EverythingClient
+from backend.core.SystemManager import system
 
 router = APIRouter()
 
@@ -9,7 +21,7 @@ client = EverythingClient()
 @router.get("/api/search")
 def search_files(q: str = "", count: int = 100, parent_path: str = None):
     """
-    搜索文件
+    搜索文件 (基於 Everything)
     """
     query = q
     if parent_path:
@@ -40,3 +52,49 @@ def list_files(path: str):
         )
         
     return {"results": results}
+
+@router.get("/api/vector_search")
+def vector_search(q: str, k: int = 5):
+    """
+    向量檢索接口
+    :param q: 搜索關鍵詞
+    :param k: 返回結果數量
+    """
+    if not q:
+        return {"results": []}
+
+    try:
+        # 獲取系統實例 (懶加載)
+        embedder = system.get_embedding_model()
+        store = system.get_vector_store()
+        
+        if not store or store.index.ntotal == 0:
+            return {"results": [], "msg": "向量數據庫為空或未初始化"}
+
+        # 1. 生成查詢向量
+        start_time = time.time()
+        query_vector = embedder.encode(q)[0]
+        
+        # 2. 執行檢索
+        results = store.search(query_vector, k=k)
+        end_time = time.time()
+        
+        # 3. 控制台輸出結果
+        print("\n" + "="*50)
+        print(f"向量搜索結果 (關鍵詞: '{q}')")
+        print("="*50)
+        for i, res in enumerate(results):
+            score = res.get('score', 0)
+            file_path = res.get('file_path', 'Unknown')
+            content = res.get('content', '')[:100] + "..."
+            print(f"[{i+1}] Score: {score:.4f} | File: {file_path}")
+            print(f"    Content: {content}")
+            print("-" * 30)
+        print(f"搜索耗時: {end_time - start_time:.4f}s")
+        print("="*50 + "\n")
+
+        return {"results": results}
+        
+    except Exception as e:
+        print(f"向量搜索出錯: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

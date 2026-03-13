@@ -1,62 +1,59 @@
 import os
+import sys
+import numpy as np
 from typing import List, Union
 from sentence_transformers import SentenceTransformer
 
 class EmbeddingModel:
     """
-    通用嵌入模型加載器
-    支持加載根目錄 models/ 下的本地模型
+    嵌入模型类，用于文本向量化
     """
-    def __init__(self, model_name: str, device: str = "cpu"):
+    def __init__(self, model_name: str = "bge-m3", device: str = "cpu"):
         """
         初始化嵌入模型
-        :param model_name: 模型名稱 (文件夾名) 或 HuggingFace ID
-        :param device: 運行設備 ('cpu', 'cuda', 'mps')
+        :param model_name: 模型名称或路径
+        :param device: 运行设备 (cpu/cuda)
         """
-        self.model_name = model_name
-        self.device = device
-        self.model = self._load_model()
-
-    def _load_model(self) -> SentenceTransformer:
-        """
-        加載模型，優先查找本地 models/ 目錄
-        """
-        # 1. 構建本地模型路徑
-        # 假設當前文件在 backend/embedding/EmbeddingModel.py
-        # 項目根目錄在 ../../
+        # 获取当前文件所在目录
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../"))
-        local_model_path = os.path.join(project_root, "models", self.model_name)
-
-        if os.path.exists(local_model_path):
-            print(f"Loading local embedding model from: {local_model_path}")
-            return SentenceTransformer(local_model_path, device=self.device)
+        # 获取项目根目录 (backend 的上一级)
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        # 构建本地模型路径
+        local_model_path = os.path.join(project_root, "models", model_name)
         
-        # 2. 如果本地不存在，嘗試從 HuggingFace 加載 (或者報錯，取決於需求)
-        # 這裡我們允許回退到在線加載，但通常用戶會希望使用本地模型
-        print(f"Local model not found at {local_model_path}, trying to load from HuggingFace Hub: {self.model_name}")
-        return SentenceTransformer(self.model_name, device=self.device)
-
+        print(f"检查本地模型路径: {local_model_path}")
+        
+        if os.path.exists(local_model_path):
+            model_path = local_model_path
+            print(f"加载本地模型: {model_path}")
+        else:
+            model_path = model_name
+            print(f"加载远程模型: {model_name}")
+        
+        self.model = SentenceTransformer(model_path, device=device)
+        self.device = device
+    
     def encode(self, texts: Union[str, List[str]]) -> List[List[float]]:
         """
-        將文本轉換為向量
-        :param texts: 單個字符串或字符串列表
+        将文本转换为向量
+        :param texts: 单个字符串或字符串列表
         :return: 向量列表
         """
-        if isinstance(texts, str):
-            texts = [texts]
-            
-        embeddings = self.model.encode(texts, normalize_embeddings=True)
-        
-        # 轉換為 Python list
-        return embeddings.tolist()
+        result = self.model.encode(texts, convert_to_numpy=True)
+        # 确保返回的是列表的列表
+        if isinstance(result, np.ndarray):
+            if result.ndim == 1:
+                # 单个字符串输入，返回包含单个向量的列表
+                return [result.tolist()]
+            else:
+                # 字符串列表输入，返回向量列表
+                return result.tolist()
+        return []
 
 if __name__ == "__main__":
-    # 測試代碼
+    # 测试代码
     try:
-        # 假設 models/ 下有一個名為 'test-model' 的文件夾 (實際使用時請替換為真實模型)
-        # 這裡我們用一個不存在的模型名來觸發在線加載測試，或者你可以手動放入一個模型
-        embedder = EmbeddingModel("all-MiniLM-L6-v2") 
+        embedder = EmbeddingModel("bge-m3")
         vectors = embedder.encode(["你好", "世界"])
         print(f"Vector dimension: {len(vectors[0])}")
         print(f"Vectors: {vectors}")

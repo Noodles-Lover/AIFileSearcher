@@ -61,22 +61,30 @@ class VectorStore:
         if self.index.ntotal == 0:
             return []
             
-        # 轉換查詢向量
-        query_np = np.array([query_vector]).astype('float32')
-        
-        # 執行搜索
-        # D: 距離 (L2距離，越小越相似)
-        # I: 索引 ID
-        D, I = self.index.search(query_np, k)
-        
-        results = []
-        for i, idx in enumerate(I[0]):
-            if idx != -1 and idx < len(self.metadata):
-                item = self.metadata[idx].copy()
-                item['score'] = float(D[0][i]) # L2 距離
-                results.append(item)
-                
-        return results
+        try:
+            # 轉換查詢向量
+            query_np = np.array([query_vector]).astype('float32')
+            
+            # 執行搜索
+            # D: 距離 (L2距離，越小越相似)
+            # I: 索引 ID
+            D, I = self.index.search(query_np, k)
+            
+            results = []
+            for i, idx in enumerate(I[0]):
+                if idx != -1 and idx < len(self.metadata):
+                    item = self.metadata[idx].copy()
+                    item['score'] = float(D[0][i]) # L2 距離
+                    results.append(item)
+                    
+            return results
+        except Exception as e:
+            print(f"搜索過程中出現錯誤: {e}")
+            # 嘗試重建索引
+            self.index = faiss.IndexFlatL2(self.dimension)
+            self.metadata = []
+            self.save()
+            return []
 
     def save(self):
         """保存索引和元數據到磁盤"""
@@ -95,3 +103,8 @@ class VectorStore:
                 print(f"Loaded vector store with {self.index.ntotal} vectors")
             except Exception as e:
                 print(f"Error loading vector store: {e}")
+                # 如果加載失敗，重建索引
+                print("重建索引...")
+                self.index = faiss.IndexFlatL2(self.dimension)
+                self.metadata = []
+                self.save()

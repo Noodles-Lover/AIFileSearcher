@@ -77,10 +77,7 @@ def test_faiss_workflow():
 
     # 5. 執行語義搜索
     print("\n" + "="*30)
-    user_query = input("請輸入搜索關鍵詞 (默認 '編程語言'): ").strip()
-    if not user_query:
-        user_query = "編程語言"
-        
+    user_query = "編程語言"
     print(f"[4/4] 執行搜索: '{user_query}'")
     
     query_vec = embedder.encode(user_query)[0]

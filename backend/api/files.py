@@ -3,7 +3,7 @@ import os
 import subprocess
 import base64
 from utils.icons import icon_manager
-from process.processor import FileProcessor
+from process.FileProcessor import FileProcessor
 
 router = APIRouter()
 

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.files import router as files_router
 from api.search import router as search_router
+from api.index import router as index_router
 
 app = FastAPI(title="AI File Searcher API")
 
@@ -17,6 +18,7 @@ app.add_middleware(
 # 包含文件相關路由
 app.include_router(files_router)
 app.include_router(search_router)
+app.include_router(index_router)
 
 @app.get("/")
 def read_root():
