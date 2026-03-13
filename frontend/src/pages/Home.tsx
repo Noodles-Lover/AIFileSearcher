@@ -113,6 +113,11 @@ const Home: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTitle, setPreviewTitle] = useState('');
 
+  // Chunk State
+  const [chunkVisible, setChunkVisible] = useState(false);
+  const [chunkContent, setChunkContent] = useState('');
+  const [chunkTitle, setChunkTitle] = useState('');
+
   const handlePreview = async (record: FileItem) => {
     setPreviewTitle(record.name);
     setPreviewVisible(true);
@@ -128,30 +133,42 @@ const Home: React.FC = () => {
       } else {
         setPreviewContent(data.content || '無內容');
       }
-    } catch (error) {
+    } catch {
       setPreviewContent('Failed to load preview');
     } finally {
       setPreviewLoading(false);
     }
   };
 
-  const handleIndexFolder = async () => {
+  const handleViewChunk = (record: FileItem) => {
+    setChunkTitle(`${record.name} - 匹配的分块内容`);
+    setChunkContent(record.content_preview || '無分块内容');
+    setChunkVisible(true);
+  };
+
+  const handlePickFolderAndIndex = async () => {
     try {
       const response = await fetch('http://localhost:8000/api/pick-folder');
       const data = await response.json();
       
       if (!data.cancelled && data.path) {
+        setCurrentPath(data.path);
+        message.success(`當前範圍: ${data.path}`);
+        setSearchQuery('');
+        performSearch('', data.path);
+        
+        // 自动开始索引
         setIndexing(true);
         setIndexProgress({ status: 'init', current: 0, total: 0, file: '', percent: 0, msg: '正在初始化系統...' });
         
         try {
-          const response = await fetch('http://localhost:8000/api/index_folder', {
+          const indexResponse = await fetch('http://localhost:8000/api/index_folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path: data.path })
           });
           
-          const reader = response.body?.getReader();
+          const reader = indexResponse.body?.getReader();
           const decoder = new TextDecoder();
           
           if (!reader) return;
@@ -189,6 +206,7 @@ const Home: React.FC = () => {
         }
       }
     } catch (error) {
+      console.error('Pick folder failed:', error);
       message.error('無法打開文件夾選擇框');
     }
   };
@@ -203,7 +221,7 @@ const Home: React.FC = () => {
           setLoading(false);
           return;
         }
-        const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=20`);
+        const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=50`);
         const data = await response.json();
         
         if (data.msg) {
@@ -304,22 +322,6 @@ const Home: React.FC = () => {
     performSearch(searchQuery, currentPath);
   };
 
-  const handlePickFolder = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/pick-folder');
-      const data = await response.json();
-      
-      if (!data.cancelled && data.path) {
-        setCurrentPath(data.path);
-        message.success(`當前範圍: ${data.path}`);
-        setSearchQuery('');
-        performSearch('', data.path);
-      }
-    } catch (error) {
-      console.error('Pick folder failed:', error);
-      message.error('無法打開文件夾選擇框');
-    }
-  };
 
   const clearPath = () => {
     setCurrentPath(null);
@@ -335,7 +337,7 @@ const Home: React.FC = () => {
       ellipsis: true,
       width: '40%',
       render: (text, record) => (
-        <Space direction="vertical" size={0} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={0} style={{ width: '100%' }}>
           <Space onClick={() => handleOpenFile(record.path)} style={{ cursor: 'pointer' }}>
             <FileIcon record={record} />
             <Text strong>{text}</Text>
@@ -344,8 +346,17 @@ const Home: React.FC = () => {
             )}
           </Space>
           {searchMode === 'semantic' && record.content_preview && (
-            <Text type="secondary" style={{ fontSize: '12px', marginLeft: 24 }} ellipsis>
-              {record.content_preview}
+            <Text 
+              type="secondary" 
+              style={{ 
+                fontSize: '12px', 
+                marginLeft: 24,
+                cursor: 'pointer',
+                color: '#1890ff'
+              }} 
+              onClick={() => handleViewChunk(record)}
+            >
+              {record.content_preview.length > 200 ? record.content_preview.substring(0, 200) + '...' : record.content_preview}
             </Text>
           )}
         </Space>
@@ -401,6 +412,13 @@ const Home: React.FC = () => {
                 disabled: record.type === 'folder'
               },
               {
+                key: 'view-chunk',
+                label: '查看分块',
+                icon: <DatabaseOutlined />,
+                onClick: () => handleViewChunk(record),
+                disabled: record.type === 'folder' || searchMode !== 'semantic' || !record.content_preview
+              },
+              {
                 key: 'explorer',
                 label: '在資源管理器中打開',
                 icon: <FolderOpenOutlined />,
@@ -454,7 +472,6 @@ const Home: React.FC = () => {
             value={searchMode} 
             onChange={e => {
               setSearchMode(e.target.value);
-              setFiles([]);
               setSearchQuery('');
             }}
             buttonStyle="solid"
@@ -470,11 +487,8 @@ const Home: React.FC = () => {
               範圍: {currentPath.length > 30 ? '...' + currentPath.slice(-30) : currentPath}
             </Tag>
           )}
-          <Tooltip title="建立向量索引以啟用語義搜索">
-            <Button icon={<DatabaseOutlined />} onClick={handleIndexFolder}>建立索引</Button>
-          </Tooltip>
-          <Tooltip title="指定文件夾範圍">
-            <Button icon={<FolderOpenOutlined />} onClick={handlePickFolder}>限制範圍</Button>
+          <Tooltip title="選擇文件夾並自動建立索引">
+            <Button icon={<FolderOpenOutlined />} onClick={handlePickFolderAndIndex} loading={indexing}>選擇文件夾</Button>
           </Tooltip>
           <Button type="text" icon={<SettingOutlined style={{ fontSize: '18px' }} />} onClick={() => navigate('/settings')} />
         </Space>
@@ -510,7 +524,7 @@ const Home: React.FC = () => {
         closable={false}
         maskClosable={false}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Text>{indexProgress.msg}</Text>
           <Progress percent={indexProgress.percent} status={indexProgress.status === 'error' ? 'exception' : 'active'} />
           {indexProgress.file && <Text type="secondary" ellipsis>正在處理: {indexProgress.file}</Text>}
@@ -519,7 +533,7 @@ const Home: React.FC = () => {
       </Modal>
 
       <Modal
-        title={`預覽: ${previewTitle}`}
+        title={`預覽: ${previewTitle || ''}`}
         open={previewVisible}
         onCancel={() => setPreviewVisible(false)}
         footer={null}
@@ -543,6 +557,28 @@ const Home: React.FC = () => {
             {previewContent}
           </pre>
         )}
+      </Modal>
+
+      <Modal
+        title={chunkTitle || ''}
+        open={chunkVisible}
+        onCancel={() => setChunkVisible(false)}
+        footer={null}
+        width={800}
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+      >
+        <pre style={{ 
+          whiteSpace: 'pre-wrap', 
+          wordWrap: 'break-word',
+          fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+          fontSize: '14px',
+          backgroundColor: '#f0f9ff',
+          padding: '12px',
+          borderRadius: '4px',
+          border: '1px solid #e6f7ff'
+        }}>
+          {chunkContent}
+        </pre>
       </Modal>
     </Layout>
   );

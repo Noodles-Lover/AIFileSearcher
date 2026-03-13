@@ -91,7 +91,7 @@ class VectorStore:
         faiss.write_index(self.index, self.index_path)
         with open(self.metadata_path, 'w', encoding='utf-8') as f:
             json.dump(self.metadata, f, ensure_ascii=False, indent=2)
-        print(f"Vector store saved to {self.index_path} and {self.metadata_path}")
+        print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存")
 
     def load(self):
         """從磁盤加載索引和元數據"""
@@ -100,11 +100,13 @@ class VectorStore:
                 self.index = faiss.read_index(self.index_path)
                 with open(self.metadata_path, 'r', encoding='utf-8') as f:
                     self.metadata = json.load(f)
-                print(f"Loaded vector store with {self.index.ntotal} vectors")
+                print(f"向量存儲已加載: {self.index.ntotal} 個向量")
             except Exception as e:
-                print(f"Error loading vector store: {e}")
+                print(f"加載向量存儲時出錯: {e}")
                 # 如果加載失敗，重建索引
                 print("重建索引...")
                 self.index = faiss.IndexFlatL2(self.dimension)
                 self.metadata = []
                 self.save()
+        else:
+            print("向量存儲文件不存在，將創建新的索引")

@@ -64,6 +64,44 @@ def vector_search(q: str, k: int = 50):
         return {"results": []}
 
     try:
+        # 直接删除文件，不需要初始化系统
+        index_path = os.path.join(project_root, "data", "faiss_index.bin")
+        metadata_path = os.path.join(project_root, "data", "metadata.json")
+        
+        files_deleted = []
+        
+        if os.path.exists(index_path):
+            os.remove(index_path)
+            files_deleted.append("faiss_index.bin")
+            
+        if os.path.exists(metadata_path):
+            os.remove(metadata_path)
+            files_deleted.append("metadata.json")
+        
+        # 清空系统管理器中的向量存储实例（如果已初始化）
+        if system.is_initialized and system.vector_store:
+            system.vector_store.index = None
+            system.vector_store.metadata = []
+        
+        print(f"索引已清空，删除文件: {', '.join(files_deleted)}")
+        
+        return {"success": True, "message": f"索引已清空，删除了 {len(files_deleted)} 个文件"}
+        
+    except Exception as e:
+        print(f"向量搜索出錯: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/vector_search_old")
+def vector_search_old(q: str, k: int = 50):
+    """
+    向量檢索接口
+    :param q: 搜索關鍵詞
+    :param k: 返回結果數量
+    """
+    if not q:
+        return {"results": []}
+
+    try:
         # 獲取系統實例 (懶加載)
         embedder = system.get_embedding_model()
         store = system.get_vector_store()

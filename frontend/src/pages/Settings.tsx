@@ -1,13 +1,45 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout, Button, Typography, Space, Card, Select, InputNumber, Radio, Divider } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Layout, Button, Typography, Space, Card, Select, InputNumber, Radio, Divider, message, Modal } from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const handleClearIndex = async () => {
+    Modal.confirm({
+      title: '确认清空索引',
+      icon: <ExclamationCircleOutlined />,
+      content: '此操作将删除所有向量索引数据和元数据，需要重新建立索引才能进行语义搜索。确定要继续吗？',
+      okText: '确认清空',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        setLoading(true);
+        try {
+          const response = await fetch('http://localhost:8000/api/clear_index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            message.success('索引已成功清空');
+          } else {
+            const data = await response.json();
+            message.error(data.error || '清空索引失败');
+          }
+        } catch {
+          message.error('无法连接到服务器');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#f5f5f7' }}>
@@ -34,7 +66,7 @@ const Settings: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Text strong>搜索范围</Text><br/>
-                  <Text type="secondary" size="small">决定搜索时包含哪些区域</Text>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>决定搜索时包含哪些区域</Text>
                 </div>
                 <Select 
                   defaultValue="indexed" 
@@ -49,9 +81,28 @@ const Settings: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Text strong>索引深度</Text><br/>
-                  <Text type="secondary" size="small">文件夹层级扫描的最大深度</Text>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>文件夹层级扫描的最大深度</Text>
                 </div>
                 <InputNumber min={1} max={20} defaultValue={5} />
+              </div>
+            </Space>
+          </Card>
+
+          <Card title="索引管理" variant="borderless">
+            <Space direction="vertical" style={{ width: '100%' }} split={<Divider style={{ margin: '8px 0' }} />}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Text strong>清空本地索引</Text><br/>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>删除所有向量索引数据，释放存储空间</Text>
+                </div>
+                <Button 
+                  danger 
+                  icon={<DeleteOutlined />} 
+                  onClick={handleClearIndex}
+                  loading={loading}
+                >
+                  清空索引
+                </Button>
               </div>
             </Space>
           </Card>
@@ -60,7 +111,7 @@ const Settings: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <Text strong>色彩主题</Text><br/>
-                <Text type="secondary" size="small">切换应用的视觉风格</Text>
+                <Text type="secondary" style={{ fontSize: '12px' }}>切换应用的视觉风格</Text>
               </div>
               <Radio.Group defaultValue="light" buttonStyle="solid">
                 <Radio.Button value="light">浅色</Radio.Button>

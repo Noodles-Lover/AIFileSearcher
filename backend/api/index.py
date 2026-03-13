@@ -56,22 +56,30 @@ async def index_folder(request: Request):
             
             for i, file_path in enumerate(files_to_process):
                 try:
+                    file_name = os.path.basename(file_path)
+                    
                     # 1. 解析与分块
+                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在解析文件: {file_name}'})}\n\n"
+                    
                     result = processor.process_file(file_path)
                     
                     if "error" in result:
-                        yield f"data: {json.dumps({'status': 'skipped', 'file': os.path.basename(file_path), 'msg': result['error']})}\n\n"
+                        yield f"data: {json.dumps({'status': 'skipped', 'file': file_name, 'msg': result['error']})}\n\n"
                         continue
                     
                     chunks = result.get("chunks", [])
                     if not chunks:
-                        yield f"data: {json.dumps({'status': 'skipped', 'file': os.path.basename(file_path), 'msg': 'No content'})}\n\n"
+                        yield f"data: {json.dumps({'status': 'skipped', 'file': file_name, 'msg': '文件無內容'})}\n\n"
                         continue
-                        
+                    
                     # 2. 向量化
+                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在向量化: {file_name} ({len(chunks)} 個文本塊)'})}\n\n"
+                    
                     vectors = embedder.encode(chunks)
                     
-                    # 3. 准备元数据 (文件路径作为唯一标识)
+                    # 3. 准备元数据
+                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在準備元數據: {file_name}'})}\n\n"
+                    
                     metas = []
                     for chunk_idx, chunk_text in enumerate(chunks):
                         metas.append({
@@ -82,15 +90,18 @@ async def index_folder(request: Request):
                         })
                     
                     # 4. 存储
+                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在存儲向量: {file_name}'})}\n\n"
+                    
                     store.add(vectors, metas)
                     
+                    # 完成该文件
                     progress = int((i + 1) / total_files * 100)
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': os.path.basename(file_path), 'percent': progress})}\n\n"
+                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': progress, 'msg': f'✓ 完成: {file_name}'})}\n\n"
                     
                 except Exception as e:
                     yield f"data: {json.dumps({'status': 'error', 'file': os.path.basename(file_path), 'msg': str(e)})}\n\n"
 
-            yield f"data: {json.dumps({'status': 'complete', 'msg': '索引完成'})}\n\n"
+            yield f"data: {json.dumps({'status': 'complete', 'msg': f'🎉 索引完成! 共處理 {total_files} 個文件'})}\n\n"
             
         except Exception as e:
             yield f"data: {json.dumps({'status': 'fatal', 'msg': str(e)})}\n\n"
