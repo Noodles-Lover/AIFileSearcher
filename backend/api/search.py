@@ -11,7 +11,7 @@ if project_root not in sys.path:
 
 from fastapi import APIRouter, HTTPException, Query
 from api.everything import EverythingClient
-from backend.core.SystemManager import system
+from backend.RAG.SystemManager import system
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ def list_files(path: str):
     return {"results": results}
 
 @router.get("/api/vector_search")
-def vector_search(q: str, k: int = 50):
+def vector_search(q: str, k: int = 30):
     """
     向量檢索接口
     :param q: 搜索關鍵詞

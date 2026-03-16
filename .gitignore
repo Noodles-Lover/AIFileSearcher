@@ -46,3 +46,6 @@ testFiles/
 # Local Files
 models/
 data/
+
+# References codes
+references/

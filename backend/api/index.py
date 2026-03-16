@@ -10,10 +10,14 @@ project_root = os.path.dirname(backend_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse
+import json
+import os
+import asyncio
+from backend.RAG.SystemManager import system
 from backend.process.FileProcessor import FileProcessor
-from backend.core.SystemManager import system
 
 router = APIRouter()
 
@@ -34,16 +38,24 @@ async def index_folder(request: Request):
 
     async def event_generator():
         try:
-            yield f"data: {json.dumps({'status': 'init', 'msg': '正在初始化系統...'})}\n\n"
+            print("=== 开始SSE流 ===")
             
-            # 初始化系统 (如果尚未初始化)
+            # 初始化系统
+            print(f"系統初始化狀態: {system.is_initialized}")
             embedder = system.get_embedding_model()
             store = system.get_vector_store()
             processor = FileProcessor()
             
-            yield f"data: {json.dumps({'status': 'scanning', 'msg': '正在掃描文件...'})}\n\n"
+            print(f"模型已加載: {embedder is not None}")
+            print(f"向量存儲已初始化: {store is not None}")
+            if store and hasattr(store, 'index') and store.index:
+                print(f"當前向量數量: {store.index.ntotal}")
+            else:
+                print("向量存儲索引為空或未初始化")
             
-            # 遍历文件
+            # 扫描文件
+            print(f"扫描文件夹: {folder_path}")
+            
             files_to_process = []
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
@@ -52,34 +64,46 @@ async def index_folder(request: Request):
                         files_to_process.append(os.path.join(root, file))
             
             total_files = len(files_to_process)
+            print(f"找到 {total_files} 个支持的文件")
+            
+            # 发送开始事件
+            yield f"data: {json.dumps({'status': 'init', 'msg': '正在初始化系統...'})}\n\n"
+            yield f"data: {json.dumps({'status': 'scanning', 'msg': '正在掃描文件...'})}\n\n"
             yield f"data: {json.dumps({'status': 'start', 'total': total_files, 'msg': f'找到 {total_files} 個支持的文件'})}\n\n"
             
+            # 处理每个文件
             for i, file_path in enumerate(files_to_process):
                 try:
                     file_name = os.path.basename(file_path)
+                    print(f"处理文件 {i+1}/{total_files}: {file_name}")
                     
-                    # 1. 解析与分块
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在解析文件: {file_name}'})}\n\n"
+                    # 发送开始处理事件 - 使用当前进度
+                    current_progress = int(i / total_files * 100)
+                    start_event = {
+                        'status': 'progress', 
+                        'current': i+1, 
+                        'total': total_files, 
+                        'file': file_name, 
+                        'percent': current_progress, 
+                        'msg': f'正在處理: {file_name}'
+                    }
                     
+                    yield f"data: {json.dumps(start_event)}\n\n"
+                    
+                    # 处理文件
                     result = processor.process_file(file_path)
                     
                     if "error" in result:
-                        yield f"data: {json.dumps({'status': 'skipped', 'file': file_name, 'msg': result['error']})}\n\n"
+                        print(f"跳过文件 {file_name}: {result['error']}")
                         continue
                     
                     chunks = result.get("chunks", [])
                     if not chunks:
-                        yield f"data: {json.dumps({'status': 'skipped', 'file': file_name, 'msg': '文件無內容'})}\n\n"
+                        print(f"跳过空文件: {file_name}")
                         continue
                     
-                    # 2. 向量化
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在向量化: {file_name} ({len(chunks)} 個文本塊)'})}\n\n"
-                    
+                    # 向量化并存储
                     vectors = embedder.encode(chunks)
-                    
-                    # 3. 准备元数据
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在準備元數據: {file_name}'})}\n\n"
-                    
                     metas = []
                     for chunk_idx, chunk_text in enumerate(chunks):
                         metas.append({
@@ -89,21 +113,43 @@ async def index_folder(request: Request):
                             "type": result["type"]
                         })
                     
-                    # 4. 存储
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': int((i) / total_files * 100), 'msg': f'正在存儲向量: {file_name}'})}\n\n"
+                    store.add(vectors, metas, file_name)
                     
-                    store.add(vectors, metas)
+                    # 发送文件完成事件 - 使用完成后的进度
+                    completed_progress = int((i + 1) / total_files * 100)
+                    complete_event = {
+                        'status': 'progress', 
+                        'current': i+1, 
+                        'total': total_files, 
+                        'file': file_name, 
+                        'percent': completed_progress, 
+                        'msg': f'✓ 完成: {file_name}'
+                    }
                     
-                    # 完成该文件
-                    progress = int((i + 1) / total_files * 100)
-                    yield f"data: {json.dumps({'status': 'progress', 'current': i+1, 'total': total_files, 'file': file_name, 'percent': progress, 'msg': f'✓ 完成: {file_name}'})}\n\n"
+                    yield f"data: {json.dumps(complete_event)}\n\n"
+                    
+                    # 短暂延迟
+                    await asyncio.sleep(0.2)
                     
                 except Exception as e:
-                    yield f"data: {json.dumps({'status': 'error', 'file': os.path.basename(file_path), 'msg': str(e)})}\n\n"
+                    print(f"处理文件 {file_name} 时出错: {e}")
+                    error_event = f"data: {json.dumps({'status': 'error', 'file': os.path.basename(file_path), 'msg': str(e)})}\n\n"
+                    yield error_event
 
+            # 发送完成事件
             yield f"data: {json.dumps({'status': 'complete', 'msg': f'🎉 索引完成! 共處理 {total_files} 個文件'})}\n\n"
+            print("=== SSE流结束 ===")
             
         except Exception as e:
             yield f"data: {json.dumps({'status': 'fatal', 'msg': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )

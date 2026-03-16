@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Modal, Spin, Progress, Radio } from 'antd';
+import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Spin, Progress, Radio } from 'antd';
+import CustomModal from '../components/CustomModal';
+import '../styles/progress.css';
 import { 
   SearchOutlined, 
   FolderOpenOutlined, 
@@ -10,7 +12,9 @@ import {
   GlobalOutlined,
   EyeOutlined,
   DatabaseOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  LoadingOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import { 
   FileIcon as LucideFile, 
@@ -107,6 +111,17 @@ const Home: React.FC = () => {
   const [indexing, setIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState({ status: '', current: 0, total: 0, file: '', percent: 0, msg: '' });
 
+  // 切换搜索模式时检查是否需要索引
+  const handleSearchModeChange = (mode: 'filename' | 'semantic') => {
+    setSearchMode(mode);
+    
+    // 如果切换到语义模式且有文件夹路径，检查是否需要索引
+    if (mode === 'semantic' && currentPath) {
+      // 可以在这里检查是否已有索引，如果没有则提示用户索引
+      message.info('切換到語義模式，如需索引請點擊「建立索引」');
+    }
+  };
+
   // Preview State
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
@@ -146,68 +161,93 @@ const Home: React.FC = () => {
     setChunkVisible(true);
   };
 
-  const handlePickFolderAndIndex = async () => {
+  const handlePickFolder = async () => {
     try {
+      // 使用后端API选择文件夹
       const response = await fetch('http://localhost:8000/api/pick-folder');
       const data = await response.json();
       
-      if (!data.cancelled && data.path) {
-        setCurrentPath(data.path);
-        message.success(`當前範圍: ${data.path}`);
+      if (data && !data.cancelled && data.path) {
+        const folderPath = data.path;
+        setCurrentPath(folderPath);
+        
+        // 清空之前的搜索结果
+        setFiles([]);
         setSearchQuery('');
-        performSearch('', data.path);
         
-        // 自动开始索引
-        setIndexing(true);
-        setIndexProgress({ status: 'init', current: 0, total: 0, file: '', percent: 0, msg: '正在初始化系統...' });
+        message.success(`已選擇文件夾: ${folderPath}`);
         
-        try {
-          const indexResponse = await fetch('http://localhost:8000/api/index_folder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: data.path })
-          });
-          
-          const reader = indexResponse.body?.getReader();
-          const decoder = new TextDecoder();
-          
-          if (!reader) return;
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n\n');
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const eventData = JSON.parse(line.substring(6));
-                  if (eventData.status === 'complete') {
-                    message.success('索引完成!');
-                    setTimeout(() => setIndexing(false), 1000);
-                  } else if (eventData.status === 'fatal') {
-                    message.error(`錯誤: ${eventData.msg}`);
-                    setIndexing(false);
-                  } else {
-                    setIndexProgress(prev => ({ ...prev, ...eventData }));
-                  }
-                } catch (e) {
-                  console.error('Parse error', e);
-                }
+        // 自动显示文件夹中的文件
+        await performSearch('', folderPath);
+      } else if (data && data.cancelled) {
+        message.info('用戶取消了選擇');
+      } else {
+        message.error('選擇文件夾失敗');
+      }
+    } catch (e) {
+      console.error('無法打開文件夾選擇框:', e);
+      message.error('無法打開文件夾選擇框');
+    }
+  };
+
+  const handleIndexFolder = async (path: string) => {
+    setIndexing(true);
+    setIndexProgress({ status: 'init', current: 0, total: 0, file: '', percent: 0, msg: '正在初始化系統...' });
+    
+    try {
+      const indexResponse = await fetch('http://localhost:8000/api/index_folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      
+      const reader = indexResponse.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) return;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        // 更好的行分割处理
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const eventData = JSON.parse(line.substring(6));
+              
+              if (eventData.status === 'complete') {
+                message.success('索引完成!');
+                setTimeout(() => setIndexing(false), 1000);
+              } else if (eventData.status === 'fatal') {
+                message.error(`錯誤: ${eventData.msg}`);
+                setIndexing(false);
+              } else if (eventData.status === 'start') {
+                // 处理开始事件
+                setIndexProgress(prev => ({ 
+                  ...prev, 
+                  total: eventData.total || 0,
+                  current: 0,
+                  percent: 0,
+                  msg: eventData.msg || '开始索引'
+                }));
+              } else if (eventData.status === 'progress' || eventData.status === 'init' || eventData.status === 'scanning') {
+                // 处理进度事件
+                setIndexProgress(prev => ({ ...prev, ...eventData }));
               }
+            } catch (e) {
+              console.error('Parse error', e, 'Raw line:', line);
             }
           }
-        } catch (err) {
-          console.error(err);
-          message.error('索引啟動失敗');
-          setIndexing(false);
         }
       }
-    } catch (error) {
-      console.error('Pick folder failed:', error);
-      message.error('無法打開文件夾選擇框');
+    } catch (err) {
+      console.error(err);
+      message.error('索引啟動失敗');
+      setIndexing(false);
     }
   };
 
@@ -221,14 +261,18 @@ const Home: React.FC = () => {
           setLoading(false);
           return;
         }
-        const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=50`);
+        const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=30`);
         const data = await response.json();
         
         if (data.msg) {
           message.warning(data.msg);
         }
         
-        const mappedFiles = (data.results || []).map((item: any, index: number) => ({
+        const mappedFiles = (data.results || []).map((item: {
+          file_path: string;
+          content: string;
+          score: number;
+        }, index: number) => ({
           key: index.toString(),
           name: item.file_path.split('\\').pop() || item.file_path.split('/').pop(),
           path: item.file_path,
@@ -267,15 +311,24 @@ const Home: React.FC = () => {
           throw new Error(data.detail || '搜索失敗');
         }
         
-        const mappedFiles = data.results.map((item: any, index: number) => ({
+        const mappedFiles = data.results.map((item: {
+          name: string;
+          path: string;
+          size: string;
+          size_bytes: number;
+          modified: string;
+          type: string;
+          created?: string;
+          extension?: string;
+        }, index: number) => ({
           key: index.toString(),
           name: item.name,
           path: item.path,
           size: item.size,
           size_bytes: item.size_bytes,
           modified: item.modified,
-          created: item.created,
-          extension: item.extension,
+          created: item.created || '-',
+          extension: item.extension || '',
           type: item.type
         }));
         
@@ -284,9 +337,9 @@ const Home: React.FC = () => {
           message.info('未找到匹配的文件');
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Search failed:', error);
-      message.error(error.message || '搜索失敗，請確保後端服務已啟動');
+      message.error((error as Error).message || '搜索失敗，請確保後端服務已啟動');
     } finally {
       setLoading(false);
     }
@@ -296,7 +349,7 @@ const Home: React.FC = () => {
     try {
       const response = await fetch(`http://localhost:8000/api/open-file?path=${encodeURIComponent(path)}`);
       if (!response.ok) throw new Error('Failed to open file');
-    } catch (error) {
+    } catch {
       message.error('無法打開文件');
     }
   };
@@ -305,7 +358,7 @@ const Home: React.FC = () => {
     try {
       const response = await fetch(`http://localhost:8000/api/open-folder?path=${encodeURIComponent(path)}`);
       if (!response.ok) throw new Error('Failed to open folder');
-    } catch (error) {
+    } catch {
       message.error('無法在資源管理器中打開');
     }
   };
@@ -470,10 +523,7 @@ const Home: React.FC = () => {
           </Button>
           <Radio.Group 
             value={searchMode} 
-            onChange={e => {
-              setSearchMode(e.target.value);
-              setSearchQuery('');
-            }}
+            onChange={(e) => handleSearchModeChange(e.target.value)}
             buttonStyle="solid"
           >
             <Radio.Button value="filename">文件名</Radio.Button>
@@ -487,9 +537,15 @@ const Home: React.FC = () => {
               範圍: {currentPath.length > 30 ? '...' + currentPath.slice(-30) : currentPath}
             </Tag>
           )}
-          <Tooltip title="選擇文件夾並自動建立索引">
-            <Button icon={<FolderOpenOutlined />} onClick={handlePickFolderAndIndex} loading={indexing}>選擇文件夾</Button>
-          </Tooltip>
+          <Button 
+            icon={<ThunderboltOutlined />} 
+            onClick={() => currentPath && handleIndexFolder(currentPath)}
+            loading={indexing}
+            disabled={!currentPath || searchMode !== 'semantic'}
+          >
+            建立索引
+          </Button>
+          <Button icon={<FolderOpenOutlined />} onClick={handlePickFolder}>選擇文件夾</Button>
           <Button type="text" icon={<SettingOutlined style={{ fontSize: '18px' }} />} onClick={() => navigate('/settings')} />
         </Space>
       </Header>
@@ -500,9 +556,9 @@ const Home: React.FC = () => {
           dataSource={files} 
           loading={loading}
           pagination={{
-            defaultPageSize: 50, 
+            defaultPageSize: 20, 
             showSizeChanger: true, 
-            pageSizeOptions: ['20', '50', '100', '200'],
+            pageSizeOptions: ['10', '20', '50', '100'],
             showTotal: (total) => `共 ${total} 個項目`,
             size: 'small',
             style: { margin: '12px 16px' }
@@ -517,28 +573,104 @@ const Home: React.FC = () => {
         />
       </Content>
 
-      <Modal
+      {/* 索引进度 - 使用顶部抽屉，适合进度显示 */}
+      <CustomModal
         title="正在建立索引"
         open={indexing}
-        footer={null}
-        closable={false}
-        maskClosable={false}
+        onClose={() => {}}
+        placement="top"
+        height={200}
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
-          <Text>{indexProgress.msg}</Text>
-          <Progress percent={indexProgress.percent} status={indexProgress.status === 'error' ? 'exception' : 'active'} />
-          {indexProgress.file && <Text type="secondary" ellipsis>正在處理: {indexProgress.file}</Text>}
-          <Text type="secondary">進度: {indexProgress.current} / {indexProgress.total}</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Spin 
+              indicator={
+                <LoadingOutlined 
+                  style={{ 
+                    fontSize: '16px',
+                    color: '#1890ff'
+                  }} 
+                />
+              } 
+            />
+            <Text strong style={{ color: '#1890ff' }}>{indexProgress.msg}</Text>
+          </div>
+          <Progress 
+            percent={indexProgress.percent} 
+            status={indexProgress.status === 'error' ? 'exception' : 'active'}
+            strokeColor={{
+              '0%': '#108ee9',
+              '50%': '#1890ff',
+              '100%': '#52c41a',
+            }}
+            trailColor="#f0f0f0"
+            strokeWidth={8}
+            format={(percent) => (
+              <span style={{ 
+                fontWeight: 'bold',
+                color: percent === 100 ? '#52c41a' : '#1890ff',
+                fontSize: '14px'
+              }}>
+                {percent}%
+              </span>
+            )}
+          />
+          {indexProgress.file && (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              padding: '8px 12px',
+              backgroundColor: '#f0f7ff',
+              borderRadius: '6px',
+              border: '1px solid #d6e4ff'
+            }}>
+              <FileTextOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
+              <Text type="secondary" ellipsis style={{ flex: 1, fontSize: '13px' }}>
+                {indexProgress.file}
+              </Text>
+            </div>
+          )}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '12px',
+            color: '#666',
+            padding: '4px 0'
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {indexProgress.percent === 100 ? (
+                <>
+                  <span style={{ color: '#52c41a' }}>✅</span>
+                  <span style={{ color: '#52c41a', fontWeight: 'bold' }}>完成</span>
+                </>
+              ) : (
+                <>
+                  <span className="pulse-dot" style={{ 
+                    display: 'inline-block',
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: '#1890ff'
+                  }}></span>
+                  <span>處理中...</span>
+                </>
+              )}
+            </span>
+            <span>進度: {indexProgress.current} / {indexProgress.total}</span>
+          </div>
         </Space>
-      </Modal>
+      </CustomModal>
 
-      <Modal
+      {/* 文件预览 - 使用居中弹窗，适合内容查看 */}
+      <CustomModal
         title={`預覽: ${previewTitle || ''}`}
         open={previewVisible}
-        onCancel={() => setPreviewVisible(false)}
-        footer={null}
+        onClose={() => setPreviewVisible(false)}
         width={800}
-        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+        placement="center"
+        height={600}
       >
         {previewLoading ? (
           <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -557,15 +689,16 @@ const Home: React.FC = () => {
             {previewContent}
           </pre>
         )}
-      </Modal>
+      </CustomModal>
 
-      <Modal
+      {/* 分块查看 - 使用居中弹窗，适合内容查看 */}
+      <CustomModal
         title={chunkTitle || ''}
         open={chunkVisible}
-        onCancel={() => setChunkVisible(false)}
-        footer={null}
+        onClose={() => setChunkVisible(false)}
         width={800}
-        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+        placement="center"
+        height={600}
       >
         <pre style={{ 
           whiteSpace: 'pre-wrap', 
@@ -579,7 +712,7 @@ const Home: React.FC = () => {
         }}>
           {chunkContent}
         </pre>
-      </Modal>
+      </CustomModal>
     </Layout>
   );
 };

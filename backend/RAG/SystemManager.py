@@ -9,8 +9,8 @@ project_root = os.path.dirname(backend_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from backend.embedding.EmbeddingModel import EmbeddingModel
-from backend.embedding.VectorStore import VectorStore
+from .EmbeddingModel import EmbeddingModel
+from .VectorStore import VectorStore
 
 class SystemManager:
     _instance = None

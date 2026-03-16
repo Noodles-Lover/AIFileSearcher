@@ -27,17 +27,16 @@ class VectorStore:
         # 嘗試加載現有索引
         self.load()
 
-    def add(self, vectors: List[List[float]], metas: List[Dict[str, Any]]):
+    def add(self, vectors: List[List[float]], metas: List[Dict[str, Any]], current_file: str = "") -> int:
         """
-        添加向量和元數據
+        添加向量和元數據到索引
         :param vectors: 向量列表
-        :param metas: 對應的元數據列表 (如文件路徑、內容片段等)
+        :param metas: 元數據列表
+        :param current_file: 當前處理的文件名
+        :return: 添加的向量數量
         """
-        if len(vectors) != len(metas):
-            raise ValueError("向量數量與元數據數量不一致")
-            
         if len(vectors) == 0:
-            return
+            return 0
 
         # 轉換為 numpy float32 數組
         vectors_np = np.array(vectors).astype('float32')
@@ -49,7 +48,10 @@ class VectorStore:
         self.metadata.extend(metas)
         
         # 自動保存
-        self.save()
+        self.save(current_file, len(vectors))
+        
+        # 返回添加的向量數量
+        return len(vectors)
 
     def search(self, query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -86,12 +88,18 @@ class VectorStore:
             self.save()
             return []
 
-    def save(self):
+    def save(self, current_file: str = None, current_vectors: int = None):
         """保存索引和元數據到磁盤"""
         faiss.write_index(self.index, self.index_path)
         with open(self.metadata_path, 'w', encoding='utf-8') as f:
             json.dump(self.metadata, f, ensure_ascii=False, indent=2)
-        print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存")
+        
+        if current_file and current_vectors is not None:
+            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存 (當前文件: {current_file}, 新增: {current_vectors} 個向量)")
+        elif current_file:
+            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存 (當前文件: {current_file})")
+        else:
+            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存")
 
     def load(self):
         """從磁盤加載索引和元數據"""
@@ -107,6 +115,9 @@ class VectorStore:
                 print("重建索引...")
                 self.index = faiss.IndexFlatL2(self.dimension)
                 self.metadata = []
-                self.save()
+                self.save()  # 重建时不显示当前文件
         else:
             print("向量存儲文件不存在，將創建新的索引")
+            # 确保索引已初始化
+            if self.index is None:
+                self.index = faiss.IndexFlatL2(self.dimension)

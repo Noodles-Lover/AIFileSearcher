@@ -9,8 +9,8 @@ backend_dir = os.path.dirname(current_dir)
 project_root = os.path.dirname(backend_dir)
 sys.path.append(project_root)
 
-from backend.embedding.EmbeddingModel import EmbeddingModel
-from backend.embedding.VectorStore import VectorStore
+from backend.RAG.EmbeddingModel import EmbeddingModel
+from backend.RAG.VectorStore import VectorStore
 
 def test_faiss_workflow():
     print("="*50)

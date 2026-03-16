@@ -8,7 +8,7 @@ backend_dir = os.path.dirname(current_dir)
 project_root = os.path.dirname(backend_dir)
 sys.path.append(project_root)
 
-from backend.embedding.EmbeddingModel import EmbeddingModel
+from backend.RAG.EmbeddingModel import EmbeddingModel
 
 def test_embedding():
     # 掃描 models 目錄下的所有文件夾

@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from fastapi import APIRouter
-from backend.core.SystemManager import system
+from backend.RAG.SystemManager import system
 
 router = APIRouter()
 
@@ -38,6 +38,11 @@ def clear_index():
         if system.is_initialized and system.vector_store:
             system.vector_store.index = None
             system.vector_store.metadata = []
+        
+        # 重置系统初始化状态，强制重新初始化
+        system.is_initialized = False
+        system.embedding_model = None
+        system.vector_store = None
         
         print(f"索引已清空，删除文件: {', '.join(files_deleted)}")
         
