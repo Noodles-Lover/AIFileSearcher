@@ -67,35 +67,92 @@ def preview_file(path: str):
 def pick_folder():
     """
     弹出系统文件夹选择框（通过 PowerShell）
+    修复中文路径编码问题
     """
     try:
         # 使用 PowerShell 调用 Windows Forms FolderBrowserDialog
+        # 添加编码处理确保中文路径正确
         ps_script = """
         Add-Type -AssemblyName System.Windows.Forms
         $f = New-Object System.Windows.Forms.FolderBrowserDialog
         $f.Description = "请选择一个文件夹进行索引"
         $f.ShowNewFolderButton = $true
         if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-            $f.SelectedPath
+            # 确保输出UTF-8编码
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+            Write-Output $f.SelectedPath
         }
         """
         
-        # 运行 PowerShell 命令
+        # 运行 PowerShell 命令，指定UTF-8编码
         result = subprocess.run(
-            ["powershell", "-Command", ps_script], 
+            ["powershell", "-Command", "-ExecutionPolicy", "Bypass", ps_script], 
             capture_output=True, 
             text=True, 
-            creationflags=subprocess.CREATE_NO_WINDOW
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            encoding='utf-8',  # 明确指定UTF-8编码
+            errors='replace'  # 处理编码错误
         )
         
         path = result.stdout.strip()
         if path:
-            return {"path": path, "cancelled": False}
+            # 验证路径有效性
+            if os.path.exists(path):
+                return {"path": path, "cancelled": False}
+            else:
+                return {"path": None, "cancelled": True, "error": "选择的路径不存在"}
         else:
             return {"path": None, "cancelled": True}
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"文件夹选择失败: {str(e)}")
+
+@router.post("/api/set-folder")
+def set_folder(request: dict):
+    """
+    直接设置文件夹路径
+    接收前端直接输入的路径
+    """
+    try:
+        path = request.get("path", "").strip()
+        
+        if not path:
+            return {"error": "路径不能为空"}
+        
+        # 处理路径中的特殊字符和编码
+        try:
+            # 尝试解码可能的编码问题
+            if isinstance(path, bytes):
+                path = path.decode('utf-8', errors='replace')
+            else:
+                # 确保是字符串
+                path = str(path)
+        except Exception:
+            return {"error": "路径编码错误"}
+        
+        # 规范化路径
+        path = os.path.normpath(path)
+        
+        # 验证路径存在性
+        if not os.path.exists(path):
+            return {"error": f"路径不存在: {path}"}
+        
+        # 验证是否为文件夹
+        if not os.path.isdir(path):
+            return {"error": f"路径不是文件夹: {path}"}
+        
+        # 验证访问权限
+        if not os.access(path, os.R_OK):
+            return {"error": f"无法访问文件夹: {path}"}
+        
+        return {
+            "path": path, 
+            "success": True,
+            "message": f"成功设置文件夹: {os.path.basename(path)}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"设置文件夹失败: {str(e)}")
 
 @router.get("/api/open-file")
 def open_file(path: str):

@@ -14,7 +14,8 @@ import {
   DatabaseOutlined,
   ThunderboltOutlined,
   LoadingOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  DownOutlined
 } from '@ant-design/icons';
 import { 
   FileIcon as LucideFile, 
@@ -106,20 +107,16 @@ const Home: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [searchMode, setSearchMode] = useState<'filename' | 'semantic'>('filename');
+  const [showPathInput, setShowPathInput] = useState(false);
+  const [inputPath, setInputPath] = useState('');
 
   // Indexing State
   const [indexing, setIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState({ status: '', current: 0, total: 0, file: '', percent: 0, msg: '' });
 
-  // 切换搜索模式时检查是否需要索引
+  // 切换搜索模式
   const handleSearchModeChange = (mode: 'filename' | 'semantic') => {
     setSearchMode(mode);
-    
-    // 如果切换到语义模式且有文件夹路径，检查是否需要索引
-    if (mode === 'semantic' && currentPath) {
-      // 可以在这里检查是否已有索引，如果没有则提示用户索引
-      message.info('切換到語義模式，如需索引請點擊「建立索引」');
-    }
   };
 
   // Preview State
@@ -181,6 +178,8 @@ const Home: React.FC = () => {
         await performSearch('', folderPath);
       } else if (data && data.cancelled) {
         message.info('用戶取消了選擇');
+      } else if (data.error) {
+        message.error(data.error);
       } else {
         message.error('選擇文件夾失敗');
       }
@@ -190,7 +189,49 @@ const Home: React.FC = () => {
     }
   };
 
+  const handleSetFolder = async (path: string) => {
+    if (!path.trim()) {
+      message.error('请输入文件夹路径');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/set-folder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: path.trim() }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentPath(data.path);
+        
+        // 清空之前的搜索结果
+        setFiles([]);
+        setSearchQuery('');
+        
+        message.success(data.message);
+        
+        // 自动显示文件夹中的文件
+        await performSearch('', data.path);
+      } else {
+        message.error(data.error || '设置文件夹失败');
+      }
+    } catch (error) {
+      console.error('设置文件夹失败:', error);
+      message.error('设置文件夹失败');
+    }
+  };
+
   const handleIndexFolder = async (path: string) => {
+    if (!path) {
+      message.warning('请先选择一个文件夹');
+      return;
+    }
+    
     setIndexing(true);
     setIndexProgress({ status: 'init', current: 0, total: 0, file: '', percent: 0, msg: '正在初始化系統...' });
     
@@ -539,13 +580,33 @@ const Home: React.FC = () => {
           )}
           <Button 
             icon={<ThunderboltOutlined />} 
-            onClick={() => currentPath && handleIndexFolder(currentPath)}
+            onClick={() => handleIndexFolder(currentPath || '')}
             loading={indexing}
-            disabled={!currentPath || searchMode !== 'semantic'}
           >
             建立索引
           </Button>
-          <Button icon={<FolderOpenOutlined />} onClick={handlePickFolder}>選擇文件夾</Button>
+          <Dropdown 
+            menu={{
+              items: [
+                {
+                  key: 'pick',
+                  label: '选择文件夹',
+                  icon: <FolderOpenOutlined />,
+                  onClick: handlePickFolder
+                },
+                {
+                  key: 'input',
+                  label: '直接输入路径',
+                  icon: <FolderOpenOutlined />,
+                  onClick: () => setShowPathInput(true)
+                }
+              ]
+            }}
+          >
+            <Button icon={<FolderOpenOutlined />}>
+              文件夹 <DownOutlined />
+            </Button>
+          </Dropdown>
           <Button type="text" icon={<SettingOutlined style={{ fontSize: '18px' }} />} onClick={() => navigate('/settings')} />
         </Space>
       </Header>
@@ -712,6 +773,49 @@ const Home: React.FC = () => {
         }}>
           {chunkContent}
         </pre>
+      </CustomModal>
+
+      {/* 路径输入模态框 */}
+      <CustomModal
+        title="直接输入文件夹路径"
+        open={showPathInput}
+        onClose={() => setShowPathInput(false)}
+        width={500}
+        placement="center"
+        height={200}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Text>请输入要索引的文件夹完整路径：</Text>
+          <Input 
+            placeholder="例如：D:\Documents\项目文件"
+            value={inputPath}
+            onChange={(e) => setInputPath(e.target.value)}
+            onPressEnter={() => {
+              handleSetFolder(inputPath);
+              setShowPathInput(false);
+              setInputPath('');
+            }}
+            style={{ fontSize: '14px' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+            <Button 
+              onClick={() => setShowPathInput(false)}
+            >
+              取消
+            </Button>
+            <Button 
+              type="primary" 
+              onClick={() => {
+                handleSetFolder(inputPath);
+                setShowPathInput(false);
+                setInputPath('');
+              }}
+              disabled={!inputPath.trim()}
+            >
+              确认
+            </Button>
+          </div>
+        </Space>
       </CustomModal>
     </Layout>
   );
