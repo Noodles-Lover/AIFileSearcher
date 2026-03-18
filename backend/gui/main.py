@@ -27,7 +27,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("AI File Searcher")
         
         # 设置窗口初始大小
-        self.resize(1200, 800)
+        self.resize(1000, 600)
         
         # 创建 Web 视图
         self.browser = QWebEngineView()

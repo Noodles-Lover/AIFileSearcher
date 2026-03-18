@@ -28,5 +28,9 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+    print("=" * 50)
+    print("🚀 启动 AI File Searcher 后端服务")
+    print("=" * 50)
+    
     # 允许外部访问，端口 8000
     uvicorn.run(app, host="0.0.0.0", port=8000)
