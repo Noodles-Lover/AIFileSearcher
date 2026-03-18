@@ -9,6 +9,7 @@ const { Title, Text } = Typography;
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [cacheLoading, setCacheLoading] = useState(false);
 
   const handleClearIndex = async () => {
     Modal.confirm({
@@ -39,6 +40,29 @@ const Settings: React.FC = () => {
         }
       }
     });
+  };
+
+  const handleClearCache = async () => {
+    setCacheLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/clear_cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        message.success(data.message || '清理缓存成功');
+      } else {
+        message.error(data.error || '清理缓存失败');
+      }
+    } catch (error) {
+      console.error('清理缓存失败:', error);
+      message.error('清理缓存失败');
+    } finally {
+      setCacheLoading(false);
+    }
   };
 
   return (
@@ -88,7 +112,7 @@ const Settings: React.FC = () => {
             </Space>
           </Card>
 
-          <Card title="索引管理" variant="borderless">
+          <Card title="空间管理" variant="borderless">
             <Space direction="vertical" style={{ width: '100%' }} split={<Divider style={{ margin: '8px 0' }} />}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -102,6 +126,20 @@ const Settings: React.FC = () => {
                   loading={loading}
                 >
                   清空索引
+                </Button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Text strong>清理无用缓存</Text><br/>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>删除不存在文件的缓存记录，优化索引性能</Text>
+                </div>
+                <Button 
+                  icon={<DeleteOutlined />} 
+                  onClick={handleClearCache}
+                  loading={cacheLoading}
+                >
+                  清理缓存
                 </Button>
               </div>
             </Space>

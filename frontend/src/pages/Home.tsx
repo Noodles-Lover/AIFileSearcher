@@ -14,7 +14,6 @@ import {
   DatabaseOutlined,
   ThunderboltOutlined,
   LoadingOutlined,
-  FileTextOutlined,
   DownOutlined
 } from '@ant-design/icons';
 import { 
@@ -233,7 +232,7 @@ const Home: React.FC = () => {
     }
     
     setIndexing(true);
-    setIndexProgress({ status: 'init', current: 0, total: 0, file: '', percent: 0, msg: '正在初始化系統...' });
+    setIndexProgress({ status: '', current: 0, total: 0, file: '', percent: 0, msg: '正在启动索引...' });
     
     try {
       const indexResponse = await fetch('http://localhost:8000/api/index_folder', {
@@ -252,7 +251,6 @@ const Home: React.FC = () => {
         if (done) break;
         
         const chunk = decoder.decode(value);
-        // 更好的行分割处理
         const lines = chunk.split('\n').filter(line => line.trim() !== '');
         
         for (const line of lines) {
@@ -267,26 +265,52 @@ const Home: React.FC = () => {
                 message.error(`錯誤: ${eventData.msg}`);
                 setIndexing(false);
               } else if (eventData.status === 'start') {
-                // 处理开始事件
                 setIndexProgress(prev => ({ 
                   ...prev, 
+                  status: eventData.status,
                   total: eventData.total || 0,
-                  current: 0,
-                  percent: 0,
+                  current: eventData.current || 0,
+                  percent: eventData.percent || 0,
+                  file: eventData.file || '',
                   msg: eventData.msg || '开始索引'
                 }));
-              } else if (eventData.status === 'progress' || eventData.status === 'init' || eventData.status === 'scanning') {
-                // 处理进度事件
-                setIndexProgress(prev => ({ ...prev, ...eventData }));
+              } else if (eventData.status === 'progress') {
+                setIndexProgress(prev => ({ 
+                  ...prev, 
+                  status: eventData.status,
+                  current: eventData.current || prev.current,
+                  total: eventData.total || prev.total,
+                  percent: eventData.percent || prev.percent,
+                  file: eventData.file || prev.file || '',
+                  msg: eventData.msg || prev.msg
+                }));
+              } else if (eventData.status === 'init') {
+                setIndexProgress(prev => ({ 
+                  ...prev, 
+                  status: eventData.status,
+                  current: eventData.current || 0,
+                  total: eventData.total || 0,
+                  percent: eventData.percent || 0,
+                  msg: eventData.msg || '初始化中...'
+                }));
+              } else if (eventData.status === 'scanning') {
+                setIndexProgress(prev => ({ 
+                  ...prev, 
+                  status: eventData.status,
+                  current: eventData.current || 0,
+                  total: eventData.total || 0,
+                  percent: eventData.percent || 0,
+                  msg: eventData.msg || '扫描中...'
+                }));
               }
             } catch (e) {
-              console.error('Parse error', e, 'Raw line:', line);
+              console.error('解析错误', e, '原始行:', line);
             }
           }
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('请求错误:', err);
       message.error('索引啟動失敗');
       setIndexing(false);
     }
@@ -676,22 +700,6 @@ const Home: React.FC = () => {
               </span>
             )}
           />
-          {indexProgress.file && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              padding: '8px 12px',
-              backgroundColor: '#f0f7ff',
-              borderRadius: '6px',
-              border: '1px solid #d6e4ff'
-            }}>
-              <FileTextOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
-              <Text type="secondary" ellipsis style={{ flex: 1, fontSize: '13px' }}>
-                {indexProgress.file}
-              </Text>
-            </div>
-          )}
           <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between',

@@ -47,19 +47,74 @@ class VectorStore:
         # 保存元數據
         self.metadata.extend(metas)
         
-        # 自動保存
+        # 自動保存（静默）
         self.save(current_file, len(vectors))
         
         # 返回添加的向量數量
         return len(vectors)
 
+    def remove_vectors_by_indices(self, indices: List[int]):
+        """
+        根据索引列表删除向量
+        :param indices: 要删除的向量索引列表
+        """
+        if not indices or self.index.ntotal == 0:
+            return
+        
+        try:
+            # 过滤掉要删除的向量
+            indices_to_keep = [i for i in range(self.index.ntotal) if i not in indices]
+            
+            if indices_to_keep:
+                # 重建索引，只保留要保留的向量
+                vectors_to_keep = self.index.reconstruct_batch(indices_to_keep)
+                metadata_to_keep = [self.metadata[i] for i in indices_to_keep]
+                
+                # 重新创建FAISS索引
+                import faiss
+                self.index = faiss.IndexFlatL2(self.dimension)
+                self.index.add(vectors_to_keep)
+                
+                # 更新元数据
+                self.metadata = metadata_to_keep
+                
+                # 保存更新后的索引
+                self.save()
+                
+                # 返回删除的向量数量，由调用方输出
+                return len(indices)
+            else:
+                # 如果没有要保留的向量，创建空索引
+                import faiss
+                self.index = faiss.IndexFlatL2(self.dimension)
+                self.metadata = []
+                self.save()
+                
+                # 返回删除的向量数量，由调用方输出
+                return len(indices)
+                
+        except Exception as e:
+            print(f"⚠️ 删除向量失败: {e}")
+
+    def remove_vectors_by_file(self, file_path: str) -> int:
+        """
+        根据文件路径删除所有相关向量
+        :param file_path: 文件路径
+        :return: 删除的向量数量
+        """
+        indices_to_remove = []
+        
+        # 找出所有属于该文件的向量索引
+        for i, meta in enumerate(self.metadata):
+            if meta.get('file_path') == file_path:
+                indices_to_remove.append(i)
+        
+        if indices_to_remove:
+            self.remove_vectors_by_indices(indices_to_remove)
+            
+        return len(indices_to_remove)
+
     def search(self, query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
-        """
-        搜索最近鄰
-        :param query_vector: 查詢向量
-        :param k: 返回結果數量
-        :return: 包含元數據和距離的結果列表
-        """
         if self.index.ntotal == 0:
             return []
             
@@ -94,12 +149,7 @@ class VectorStore:
         with open(self.metadata_path, 'w', encoding='utf-8') as f:
             json.dump(self.metadata, f, ensure_ascii=False, indent=2)
         
-        if current_file and current_vectors is not None:
-            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存 (當前文件: {current_file}, 新增: {current_vectors} 個向量)")
-        elif current_file:
-            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存 (當前文件: {current_file})")
-        else:
-            print(f"向量存儲已更新: {self.index.ntotal} 個向量已保存")
+        # 静默保存，不输出信息
 
     def load(self):
         """從磁盤加載索引和元數據"""

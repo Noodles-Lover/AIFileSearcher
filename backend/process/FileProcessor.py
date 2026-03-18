@@ -40,6 +40,13 @@ class FileProcessor:
             '.pptx': FixedSizeChunking(chunk_size=500, overlap=50),
         }
 
+    def is_supported_file(self, file_path: str) -> bool:
+        """
+        检查文件是否支持
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext in self.PARSERS
+
     def process_file(self, file_path: str, chunking_strategy: Optional[ChunkingStrategy] = None) -> Dict:
         """
         處理單個文件：解析 -> 清洗 -> 分塊

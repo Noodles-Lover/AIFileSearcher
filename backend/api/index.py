@@ -1,155 +1,122 @@
-import sys
 import os
 import json
-import time
-
-# 确保项目根目录在路径中
-current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(current_dir)
-project_root = os.path.dirname(backend_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse
-import json
-import os
 import asyncio
+from typing import AsyncGenerator
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
 from backend.RAG.SystemManager import system
+from backend.RAG.FileCache import FileCache
 from backend.process.FileProcessor import FileProcessor
 
 router = APIRouter()
 
-@router.post("/api/index_folder")
-async def index_folder(request: Request):
-    """
-    索引文件夹接口 (SSE 流式响应)
-    接收文件夹路径，遍历处理文件，并实时返回进度
-    """
-    data = await request.json()
-    folder_path = data.get("path")
+@router.post("/index_folder")
+async def index_folder(request: dict):
+    """索引指定文件夹"""
     
-    if not folder_path:
-        return {"error": "Path is required"}
-        
-    if not os.path.exists(folder_path):
-        return {"error": f"Path does not exist: {folder_path}"}
-
     async def event_generator():
         try:
-            print("=== 开始SSE流 ===")
+            folder_path = request.get("path")
+            if not folder_path or not os.path.exists(folder_path):
+                yield f"data: {json.dumps({'status': 'error', 'msg': '无效的文件夹路径'})}\n\n"
+                await asyncio.sleep(0)
+                return
+            
+            # 获取项目根目录
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
             
             # 初始化系统
-            print(f"系統初始化狀態: {system.is_initialized}")
             embedder = system.get_embedding_model()
             store = system.get_vector_store()
             processor = FileProcessor()
             
-            print(f"模型已加載: {embedder is not None}")
-            print(f"向量存儲已初始化: {store is not None}")
-            if store and hasattr(store, 'index') and store.index:
-                print(f"當前向量數量: {store.index.ntotal}")
-            else:
-                print("向量存儲索引為空或未初始化")
+            # 初始化文件缓存
+            cache_path = os.path.join(project_root, "data", "file_cache.json")
+            file_cache = FileCache(cache_path)
             
-            # 扫描文件
-            print(f"扫描文件夹: {folder_path}")
+            # 发送初始化事件
+            yield f"data: {json.dumps({'status': 'init', 'current': 0, 'total': 0, 'percent': 0, 'msg': '正在初始化系統...'})}\n\n"
+            await asyncio.sleep(0)
             
+            # 扫描文件夹
             files_to_process = []
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
-                    ext = os.path.splitext(file)[1].lower()
-                    if ext in processor.PARSERS:
-                        files_to_process.append(os.path.join(root, file))
+                    file_path = os.path.join(root, file)
+                    if processor.is_supported_file(file_path):
+                        files_to_process.append(file_path)
             
             total_files = len(files_to_process)
-            print(f"找到 {total_files} 个支持的文件")
+            
+            if total_files == 0:
+                yield f"data: {json.dumps({'status': 'error', 'current': 0, 'total': 0, 'percent': 0, 'msg': '未找到支持的文件'})}\n\n"
+                await asyncio.sleep(0)
+                return
+            
+            # 发送扫描事件
+            yield f"data: {json.dumps({'status': 'scanning', 'current': 0, 'total': total_files, 'percent': 0, 'msg': '正在掃描文件...'})}\n\n"
+            await asyncio.sleep(0)
             
             # 发送开始事件
-            yield f"data: {json.dumps({'status': 'init', 'msg': '正在初始化系統...'})}\n\n"
-            yield f"data: {json.dumps({'status': 'scanning', 'msg': '正在掃描文件...'})}\n\n"
-            yield f"data: {json.dumps({'status': 'start', 'total': total_files, 'msg': f'找到 {total_files} 個支持的文件'})}\n\n"
+            yield f"data: {json.dumps({'status': 'start', 'current': 0, 'total': total_files, 'percent': 0, 'msg': f'找到 {total_files} 個支持的文件'})}\n\n"
+            await asyncio.sleep(0)
+            
+            processed_count = 0
+            skipped_count = 0
             
             # 处理每个文件
             for i, file_path in enumerate(files_to_process):
                 try:
                     file_name = os.path.basename(file_path)
-                    print(f"处理文件 {i+1}/{total_files}: {file_name}")
+                    current = i + 1
+                    percent = int((current / total_files) * 100)
                     
-                    # 发送开始处理事件 - 使用当前进度
-                    current_progress = int(i / total_files * 100)
-                    start_event = {
-                        'status': 'progress', 
-                        'current': i+1, 
-                        'total': total_files, 
-                        'file': file_name, 
-                        'percent': current_progress, 
-                        'msg': f'正在處理: {file_name}'
-                    }
-                    
-                    yield f"data: {json.dumps(start_event)}\n\n"
-                    
-                    # 处理文件
-                    result = processor.process_file(file_path)
-                    
-                    if "error" in result:
-                        print(f"跳过文件 {file_name}: {result['error']}")
-                        continue
-                    
-                    chunks = result.get("chunks", [])
-                    if not chunks:
-                        print(f"跳过空文件: {file_name}")
-                        continue
-                    
-                    # 向量化并存储
-                    vectors = embedder.encode(chunks)
-                    metas = []
-                    for chunk_idx, chunk_text in enumerate(chunks):
-                        metas.append({
-                            "file_path": file_path,
-                            "chunk_index": chunk_idx,
-                            "content": chunk_text,
-                            "type": result["type"]
-                        })
-                    
-                    store.add(vectors, metas, file_name)
-                    
-                    # 发送文件完成事件 - 使用完成后的进度
-                    completed_progress = int((i + 1) / total_files * 100)
-                    complete_event = {
-                        'status': 'progress', 
-                        'current': i+1, 
-                        'total': total_files, 
-                        'file': file_name, 
-                        'percent': completed_progress, 
-                        'msg': f'✓ 完成: {file_name}'
-                    }
-                    
-                    yield f"data: {json.dumps(complete_event)}\n\n"
-                    
-                    # 短暂延迟
-                    await asyncio.sleep(0.2)
+                    # 检查文件是否需要处理
+                    if file_cache.should_process_file(file_path):
+                        # 处理文件
+                        processor.process_file(file_path)
+                        processed_count += 1
+                        
+                        # 发送进度事件
+                        yield f"data: {json.dumps({'status': 'progress', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'正在處理: {file_name}'})}\n\n"
+                        await asyncio.sleep(0)
+                    else:
+                        # 跳过文件
+                        skipped_count += 1
+                        
+                        # 发送跳过事件
+                        yield f"data: {json.dumps({'status': 'skip', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'跳過: 文件未修改'})}\n\n"
+                        await asyncio.sleep(0)
                     
                 except Exception as e:
-                    print(f"处理文件 {file_name} 时出错: {e}")
-                    error_event = f"data: {json.dumps({'status': 'error', 'file': os.path.basename(file_path), 'msg': str(e)})}\n\n"
-                    yield error_event
-
+                    # 处理错误
+                    current = i + 1
+                    percent = int((current / total_files) * 100)
+                    file_name = os.path.basename(file_path)
+                    
+                    yield f"data: {json.dumps({'status': 'error', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'錯誤: {str(e)}'})}\n\n"
+                    await asyncio.sleep(0)
+            
             # 发送完成事件
-            yield f"data: {json.dumps({'status': 'complete', 'msg': f'🎉 索引完成! 共處理 {total_files} 個文件'})}\n\n"
-            print("=== SSE流结束 ===")
+            yield f"data: {json.dumps({'status': 'complete', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': f'索引完成！處理了 {processed_count} 個文件，跳過了 {skipped_count} 個文件'})}\n\n"
+            await asyncio.sleep(0)
             
         except Exception as e:
-            yield f"data: {json.dumps({'status': 'fatal', 'msg': str(e)})}\n\n"
-
+            # 发送致命错误
+            yield f"data: {json.dumps({'status': 'fatal', 'current': 0, 'total': 0, 'percent': 0, 'msg': f'致命錯誤: {str(e)}'})}\n\n"
+            await asyncio.sleep(0)
+    
     return StreamingResponse(
         event_generator(), 
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
+            "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*"
+            "Access-Control-Allow-Headers": "*",
+            "X-Accel-Buffering": "no"
         }
     )
