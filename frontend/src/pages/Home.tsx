@@ -262,36 +262,76 @@ const Home: React.FC = () => {
     try {
       if (searchMode === 'semantic') {
         if (!query) {
-          setLoading(false);
-          return;
-        }
-        const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=30`);
-        const data = await response.json();
-        
-        if (data.msg) {
-          message.warning(data.msg);
-        }
-        
-        const mappedFiles = (data.results || []).map((item: {
-          file_path: string;
-          content: string;
-          score: number;
-        }, index: number) => ({
-          key: index.toString(),
-          name: item.file_path.split('\\').pop() || item.file_path.split('/').pop(),
-          path: item.file_path,
-          size: '-',
-          size_bytes: 0,
-          modified: '-',
-          created: '-',
-          extension: '.' + (item.file_path.split('.').pop() || ''),
-          type: 'file',
-          score: item.score,
-          content_preview: item.content
-        }));
-        setFiles(mappedFiles);
-        if (mappedFiles.length === 0) {
-          message.info('未找到相關內容');
+          // 如果语义搜索模式下没有查询词但有路径，则显示文件夹内容
+          if (path) {
+            const params = new URLSearchParams();
+            params.append('parent_path', path);
+            const url = `http://localhost:8000/api/list?${params.toString()}`;
+            
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (!response.ok) {
+              const errorMessage = data.detail || data.message || '获取文件列表失败';
+              console.error('List API Error:', { status: response.status, data });
+              throw new Error(errorMessage);
+            }
+            
+            const mappedFiles = data.results.map((item: {
+              name: string;
+              path: string;
+              size: string;
+              size_bytes: number;
+              modified: string;
+              type: string;
+            }, index: number) => ({
+              key: index.toString(),
+              name: item.name,
+              path: item.path,
+              size: item.size,
+              size_bytes: item.size_bytes,
+              modified: item.modified,
+              created: item.modified,
+              extension: item.type === 'folder' ? '' : '.' + (item.name.split('.').pop() || ''),
+              type: item.type,
+              score: undefined,
+              content_preview: undefined
+            }));
+            setFiles(mappedFiles);
+          } else {
+            setLoading(false);
+            return;
+          }
+        } else {
+          // 有查询词，执行语义搜索
+          const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=30`);
+          const data = await response.json();
+          
+          if (data.msg) {
+            message.warning(data.msg);
+          }
+          
+          const mappedFiles = (data.results || []).map((item: {
+            file_path: string;
+            content: string;
+            score: number;
+          }, index: number) => ({
+            key: index.toString(),
+            name: item.file_path.split('\\').pop() || item.file_path.split('/').pop(),
+            path: item.file_path,
+            size: '-',
+            size_bytes: 0,
+            modified: '-',
+            created: '-',
+            extension: '.' + (item.file_path.split('.').pop() || ''),
+            type: 'file',
+            score: item.score,
+            content_preview: item.content
+          }));
+          setFiles(mappedFiles);
+          if (mappedFiles.length === 0) {
+            message.info('未找到相關內容');
+          }
         }
         
       } else {
@@ -302,8 +342,10 @@ const Home: React.FC = () => {
         let url = `http://localhost:8000/api/search?${params.toString()}`;
         
         if (!query && path) {
-          url = `http://localhost:8000/api/list?path=${encodeURIComponent(path)}`;
+          // 有路径无查询词，显示文件夹内容
+          url = `http://localhost:8000/api/list?parent_path=${encodeURIComponent(path)}`;
         } else if (!query && !path) {
+          // 无路径无查询词，不进行全盘搜索
           setLoading(false);
           return;
         }
@@ -372,10 +414,11 @@ const Home: React.FC = () => {
       message.warning('請輸入搜索關鍵詞或選擇文件夾');
       return;
     }
-    if (!searchQuery.trim() && searchMode === 'semantic') {
-      message.warning('語義搜索需要輸入關鍵詞');
+    if (!searchQuery.trim() && !currentPath && searchMode === 'semantic') {
+      message.warning('語義搜索需要輸入關鍵詞或選擇文件夾');
       return;
     }
+    // 语义搜索模式下，如果没有搜索词但有路径，仍然执行搜索以显示文件夹内容
     performSearch(searchQuery, currentPath);
   };
 
@@ -511,7 +554,7 @@ const Home: React.FC = () => {
             placeholder={
               searchMode === 'filename' 
                 ? (currentPath ? `在 ${currentPath.split('\\').pop()} 中搜索...` : "搜索本地文件 (Everything)...")
-                : "輸入語義關鍵詞進行智能搜索..."
+                : (currentPath ? "輸入語義關鍵詞進行智能搜索，或留空显示文件列表..." : "輸入語義關鍵詞進行智能搜索...")
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

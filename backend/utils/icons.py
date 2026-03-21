@@ -26,7 +26,12 @@ class SystemIconManager:
         
         # 2. 生成緩存鍵 (Generate Key)
         if is_dir:
-            cache_key = "__folder__"
+            # 检查是否是驱动器根目录
+            drive_root = os.path.splitdrive(path)[0] + os.sep
+            if path == drive_root:
+                cache_key = f"__drive__{os.path.splitdrive(path)[0]}"  # 驱动器图标
+            else:
+                cache_key = "__folder__"  # 普通文件夹图标
         elif ext in ['.exe', '.lnk', '.ico', '.cur', '.ani']:
             cache_key = path # 唯一圖標使用完整路徑
         else:

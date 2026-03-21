@@ -37,19 +37,68 @@ def search_files(q: str = "", count: int = 100, parent_path: str = None):
     return {"results": results}
 
 @router.get("/api/list")
-def list_files(path: str):
+def list_files(parent_path: str = ""):
     """
     列出指定目錄下的文件
     """
-    results = client.get_files_in_folder(path)
-    
-    if results == "CONNECTION_ERROR":
-        raise HTTPException(
-            status_code=503, 
-            detail="無法連接到 Everything 伺服器。請確保 Everything 正在運行並已啟用 HTTP 伺服器。"
-        )
+    try:
+        # 首先尝试使用 Everything
+        results = client.get_files_in_folder(parent_path)
         
-    return {"results": results}
+        if results == "CONNECTION_ERROR":
+            # 如果 Everything 不可用，使用 Python 的 os.listdir 作为备用
+            import os
+            if not parent_path or not os.path.exists(parent_path):
+                return {"results": []}
+            
+            results = []
+            try:
+                for item in os.listdir(parent_path):
+                    item_path = os.path.join(parent_path, item)
+                    if os.path.exists(item_path):
+                        stat = os.stat(item_path)
+                        is_dir = os.path.isdir(item_path)
+                        
+                        file_info = {
+                            "name": item,
+                            "path": item_path,
+                            "size": "0 B" if is_dir else format_size(stat.st_size),
+                            "size_bytes": 0 if is_dir else stat.st_size,
+                            "modified": format_time(stat.st_mtime),
+                            "type": "folder" if is_dir else "file"
+                        }
+                        results.append(file_info)
+            except PermissionError:
+                # 如果没有权限访问，返回空列表
+                results = []
+                
+        return {"results": results}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"获取文件列表失败: {str(e)}"
+        )
+
+def format_size(size_bytes):
+    """格式化文件大小"""
+    if size_bytes == 0:
+        return "0 B"
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    import math
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_names[i]}"
+
+def format_time(timestamp):
+    """格式化时间戳"""
+    import datetime
+    try:
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        return "-"
 
 @router.get("/api/vector_search")
 def vector_search(q: str, k: int = 30):
