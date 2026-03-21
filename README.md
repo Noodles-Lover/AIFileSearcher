@@ -40,7 +40,7 @@ AIFileSearcher/
 │   ├── process/             # 文件处理模块
 │   └── test/                # 测试脚本
 ├── models/                   # 本地嵌入模型存储
-├── data/                     # 向量数据库和缓存
+├── local_data/               # 向量数据库和缓存
 │   ├── faiss_index.bin      # FAISS 向量索引
 │   ├── metadata.json        # 向量元数据
 │   └── file_cache.json      # 文件修改时间缓存
@@ -188,7 +188,7 @@ python gui/main.py
 
 - **大文件处理**：建议分批索引
 - **内存管理**：定期清理缓存
-- **磁盘空间**：确保 `data/` 目录有足够空间
+- **磁盘空间**：确保 `local_data/` 目录有足够空间
 
 ## 🔄 开发指南
 

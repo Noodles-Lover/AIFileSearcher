@@ -1,18 +1,16 @@
 import os
 import sys
 
-# 將 backend 的上一級目錄添加到路徑，以便導入 backend 模塊
-# 當前腳本在 backend/test/test_embedding.py
-current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(current_dir)
-project_root = os.path.dirname(backend_dir)
-sys.path.append(project_root)
+from backend.utils.path_utils import ensure_project_path, get_models_path
+
+# 确保项目根目录在路径中
+ensure_project_path()
 
 from backend.RAG.EmbeddingModel import EmbeddingModel
 
 def test_embedding():
     # 掃描 models 目錄下的所有文件夾
-    models_dir = os.path.join(project_root, "models")
+    models_dir = get_models_path()
     if not os.path.exists(models_dir):
         print(f"錯誤: {models_dir} 目錄不存在，請先下載模型。")
         return

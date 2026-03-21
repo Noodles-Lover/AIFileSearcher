@@ -1,13 +1,6 @@
 import os
-import sys
 from typing import Optional
-
-# 添加項目根目錄到路徑，以便導入 backend 模塊
-current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(current_dir)
-project_root = os.path.dirname(backend_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+from backend.utils.path_utils import get_project_root, get_models_path, get_data_path
 
 from .EmbeddingModel import EmbeddingModel
 from .VectorStore import VectorStore
@@ -35,76 +28,75 @@ class SystemManager:
             return
         
         try:
-            print("🚀 启动程序，自动加载embedding模型...")
+            print("Starting program, auto-loading embedding model...")
             self.initialize()
             self.auto_loaded = True
-            print("✅ 模型自动加载完成")
+            print("Model auto-loading completed")
         except Exception as e:
-            print(f"⚠️ 模型自动加载失败: {e}")
-            print("💡 提示：将在首次使用时手动加载")
+            print(f"Model auto-loading failed: {e}")
+            print("Note: Will manually load on first use")
 
     def initialize(self, model_name: str = "bge-m3"):
-        """初始化系統核心組件 (嵌入模型和向量數據庫)"""
+        """Initialize system core components (embedding model and vector database)"""
         if self.is_initialized:
-            print("🔧 系统已初始化，跳过重复初始化")
+            print("System already initialized, skipping...")
             return
 
-        print(f"正在初始化系統核心組件... 模型: {model_name}")
+        print(f"Initializing system core components... Model: {model_name}")
         
-        # 1. 初始化嵌入模型
-        models_dir = os.path.join(project_root, "models")
-        model_path = os.path.join(models_dir, model_name)
+        # 1. Initialize embedding model
+        models_dir = get_models_path()
+        model_path = get_models_path(model_name)
         
         if os.path.exists(model_path):
-            if not self.embedding_model:  # 避免重复加载
-                print("📥 加载embedding模型...")
+            if not self.embedding_model:  # Avoid duplicate loading
+                print("Loading embedding model...")
                 self.embedding_model = EmbeddingModel(model_name)
-                print("✅ Embedding模型加载完成")
+                print("Embedding model loaded")
             else:
-                print("🔧 Embedding模型已存在，跳过加载")
+                print("Embedding model already exists, skipping")
         else:
             if os.path.exists(models_dir):
                 available_models = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
                 if available_models:
-                    print(f"指定模型 {model_name} 不存在，使用第一個可用模型: {available_models[0]}")
+                    print(f"Specified model {model_name} not found, using first available: {available_models[0]}")
                     if not self.embedding_model:
-                        print("📥 加载可用模型...")
+                        print("Loading available model...")
                         self.embedding_model = EmbeddingModel(available_models[0])
-                        print("✅ 可用模型加载完成")
+                        print("Available model loaded")
                 else:
-                    print(f"未找到本地模型，將嘗試從 HuggingFace 下載: {model_name}")
+                    print(f"No local models found, will try to download from HuggingFace: {model_name}")
                     if not self.embedding_model:
-                        print("📥 从HuggingFace加载模型...")
+                        print("Loading from HuggingFace...")
                         self.embedding_model = EmbeddingModel(model_name)
-                        print("✅ HuggingFace模型加载完成")
+                        print("HuggingFace model loaded")
             else:
                 if not self.embedding_model:
-                    print("📥 创建默认模型...")
+                    print("Creating default model...")
                     self.embedding_model = EmbeddingModel(model_name)
-                    print("✅ 默认模型加载完成")
+                    print("Default model loaded")
 
-        # 2. 初始化向量數據庫
-        # 尝试获取维度
+        # 2. Initialize vector database
+        # Try to get dimension
         try:
-            # 方法 1: 使用模型的方法
+            # Method 1: Use model method
             if hasattr(self.embedding_model.model, 'get_sentence_embedding_dimension'):
                 dimension = self.embedding_model.model.get_sentence_embedding_dimension()
-                print(f"使用模型方法獲取維度: {dimension}")
+                print(f"Got dimension using model method: {dimension}")
             else:
-                # 方法 2: 通过编码一个样本获取维度
+                # Method 2: Get dimension by encoding a sample
                 sample_vector = self.embedding_model.encode(["test"])[0]
                 dimension = len(sample_vector)
-                print(f"通过样本编码獲取維度: {dimension}")
+                print(f"Got dimension by sample encoding: {dimension}")
         except Exception as e:
-            print(f"获取维度失败，使用默认值: {e}")
-            dimension = 1024  # 默认维度
+            print(f"Failed to get dimension, using default: {e}")
+            dimension = 1024  # Default dimension
 
-        # 數據存儲在根目錄的 data 文件夾下
-        data_dir = os.path.join(project_root, "data")
-        os.makedirs(data_dir, exist_ok=True)
+        # Data stored in data folder under project root
+        data_dir = os.path.dirname(get_data_path("dummy"))
         
-        index_path = os.path.join(data_dir, "faiss_index.bin")
-        metadata_path = os.path.join(data_dir, "metadata.json")
+        index_path = get_data_path("faiss_index.bin")
+        metadata_path = get_data_path("metadata.json")
         
         self.vector_store = VectorStore(
             dimension=dimension,
@@ -113,16 +105,16 @@ class SystemManager:
         )
         
         self.is_initialized = True
-        print("系統核心組件初始化完成")
+        print("System core components initialized")
 
     def get_embedding_model(self) -> EmbeddingModel:
-        """获取嵌入模型，确保已加载"""
+        """Get embedding model, ensure loaded"""
         if not self.is_initialized:
-            print("🔄 系统未初始化，正在初始化...")
+            print("System not initialized, initializing...")
             self.initialize()
         
         if not self.embedding_model:
-            print("⚠️ 嵌入模型未加载，尝试手动加载...")
+            print("Embedding model not loaded, trying manual load...")
             self.initialize()
         
         return self.embedding_model
@@ -132,5 +124,5 @@ class SystemManager:
             self.initialize()
         return self.vector_store
 
-# 全局單例
+# Global singleton
 system = SystemManager.get_instance()

@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Button, Typography, Space, Card, Select, InputNumber, Radio, Divider, message, Modal } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { API_ENDPOINTS, apiPost } from '../utils/api';
+
+interface ApiResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -22,19 +29,11 @@ const Settings: React.FC = () => {
       onOk: async () => {
         setLoading(true);
         try {
-          const response = await fetch('http://localhost:8000/api/clear_index', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (response.ok) {
-            message.success('索引已成功清空');
-          } else {
-            const data = await response.json();
-            message.error(data.error || '清空索引失败');
-          }
-        } catch {
-          message.error('无法连接到服务器');
+          await apiPost(API_ENDPOINTS.CLEAR_INDEX);
+          message.success('索引已成功清空');
+        } catch (error) {
+          console.error('清空索引失败:', error);
+          message.error('清空索引失败');
         } finally {
           setLoading(false);
         }
@@ -45,12 +44,7 @@ const Settings: React.FC = () => {
   const handleClearCache = async () => {
     setCacheLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/clear_cache', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      const data = await response.json();
+      const data = await apiPost<ApiResponse>(API_ENDPOINTS.CLEAR_CACHE);
       
       if (data.success) {
         message.success(data.message || '清理缓存成功');

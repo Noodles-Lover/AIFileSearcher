@@ -2,7 +2,27 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Spin, Progress, Radio } from 'antd';
 import CustomModal from '../components/CustomModal';
+import FileIcon, { type FileItem } from '../components/FileIcon';
+import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
 import '../styles/progress.css';
+
+interface PreviewResponse {
+  error?: string;
+  content?: string;
+}
+
+interface FolderResponse {
+  path?: string;
+  cancelled?: boolean;
+  error?: string;
+}
+
+interface SetFolderResponse {
+  path?: string;
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
 import { 
   SearchOutlined, 
   FolderOpenOutlined, 
@@ -16,88 +36,10 @@ import {
   LoadingOutlined,
   DownOutlined
 } from '@ant-design/icons';
-import { 
-  FileIcon as LucideFile, 
-  Folder, 
-  FileImage, 
-  FileVideo, 
-  FileAudio, 
-  FileText, 
-  FileArchive, 
-  FileCode, 
-  FileSpreadsheet 
-} from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
-
-interface FileItem {
-  key: string;
-  name: string;
-  path: string;
-  size: string;
-  size_bytes: number;
-  modified: string;
-  created: string;
-  extension: string;
-  type: 'file' | 'folder';
-  score?: number;
-  content_preview?: string;
-}
-
-const FileIcon: React.FC<{ record: FileItem }> = ({ record }) => {
-  const [iconError, setIconError] = React.useState(false);
-  
-  const iconUrl = `http://localhost:8000/api/icon?path=${encodeURIComponent(record.path)}`;
-
-  if (!iconError) {
-    return (
-      <img 
-        src={iconUrl} 
-        alt="" 
-        style={{ width: 18, height: 18, objectFit: 'contain' }}
-        onError={() => setIconError(true)}
-      />
-    );
-  }
-
-  if (record.type === 'folder') {
-    return <Folder size={18} color="#ffca28" fill="#ffca28" />;
-  }
-
-  const ext = (record.extension || '').toLowerCase();
-  
-  if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'].includes(ext)) {
-    return <FileImage size={18} color="#52c41a" />;
-  }
-  
-  if (['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv'].includes(ext)) {
-    return <FileVideo size={18} color="#722ed1" />;
-  }
-  
-  if (['.mp3', '.wav', '.flac', '.ogg', '.m4a'].includes(ext)) {
-    return <FileAudio size={18} color="#fa8c16" />;
-  }
-  
-  if (['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
-    return <FileSpreadsheet size={18} color="#1890ff" />;
-  }
-  
-  if (['.md', '.txt'].includes(ext)) {
-    return <FileText size={18} color="#8c8c8c" />;
-  }
-  
-  if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(ext)) {
-    return <FileArchive size={18} color="#faad14" />;
-  }
-  
-  if (['.js', '.ts', '.tsx', '.jsx', '.py', '.java', '.cpp', '.h', '.html', '.css', '.json', '.sh', '.bat', '.ps1'].includes(ext)) {
-    return <FileCode size={18} color="#1890ff" />;
-  }
-
-  return <LucideFile size={18} color="#8c8c8c" />;
-};
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -136,8 +78,7 @@ const Home: React.FC = () => {
     setPreviewContent('');
     
     try {
-      const response = await fetch(`http://localhost:8000/api/preview?path=${encodeURIComponent(record.path)}`);
-      const data = await response.json();
+      const data = await apiGet<PreviewResponse>(`${API_ENDPOINTS.PREVIEW}?path=${encodeURIComponent(record.path)}`);
       
       if (data.error) {
         setPreviewContent(`Error: ${data.error}`);
@@ -160,8 +101,7 @@ const Home: React.FC = () => {
   const handlePickFolder = async () => {
     try {
       // 使用后端API选择文件夹
-      const response = await fetch('http://localhost:8000/api/pick-folder');
-      const data = await response.json();
+      const data = await apiGet<FolderResponse>(API_ENDPOINTS.PICK_FOLDER);
       
       if (data && !data.cancelled && data.path) {
         const folderPath = data.path;
@@ -195,27 +135,20 @@ const Home: React.FC = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/set-folder', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: path.trim() }),
-      });
-
-      const data = await response.json();
+      const data = await apiPost<SetFolderResponse>(API_ENDPOINTS.SET_FOLDER, { path });
       
       if (data.success) {
-        setCurrentPath(data.path);
+        setCurrentPath(data.path || path);
+        message.success(data.message || '文件夹设置成功');
+        setShowPathInput(false);
+        setInputPath('');
         
         // 清空之前的搜索结果
         setFiles([]);
         setSearchQuery('');
         
-        message.success(data.message);
-        
         // 自动显示文件夹中的文件
-        await performSearch('', data.path);
+        await performSearch('', data.path || path);
       } else {
         message.error(data.error || '设置文件夹失败');
       }
@@ -241,10 +174,16 @@ const Home: React.FC = () => {
         body: JSON.stringify({ path })
       });
       
+      if (!indexResponse.ok) {
+        throw new Error(`索引请求失败: ${indexResponse.status} ${indexResponse.statusText}`);
+      }
+      
       const reader = indexResponse.body?.getReader();
       const decoder = new TextDecoder();
       
-      if (!reader) return;
+      if (!reader) {
+        throw new Error('无法获取响应流');
+      }
       
       while (true) {
         const { done, value } = await reader.read();
@@ -309,9 +248,9 @@ const Home: React.FC = () => {
           }
         }
       }
-    } catch (err) {
-      console.error('请求错误:', err);
-      message.error('索引啟動失敗');
+    } catch (error) {
+      console.error('索引请求错误:', error);
+      message.error(`索引启动失败: ${error instanceof Error ? error.message : '未知错误'}`);
       setIndexing(false);
     }
   };

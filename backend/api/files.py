@@ -2,6 +2,15 @@ from fastapi import APIRouter, HTTPException, Response
 import os
 import subprocess
 import base64
+import sys
+
+# 确保项目根目录在路径中
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(current_dir)
+project_root = os.path.dirname(backend_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 from utils.icons import icon_manager
 from process.FileProcessor import FileProcessor
 

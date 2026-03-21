@@ -35,7 +35,7 @@ RAG模块是AI文件搜索器的核心组件，负责文件处理、向量化、
 - `update_file_cache(file_path)` - 更新文件缓存
 - `clean_nonexistent_files()` - 清理不存在文件的缓存
 
-**缓存文件**：`data/file_cache.json`
+**缓存文件**：`local_data/file_cache.json`
 
 ---
 
@@ -54,8 +54,8 @@ RAG模块是AI文件搜索器的核心组件，负责文件处理、向量化、
 - `remove_vectors_by_file(file_path)` - 删除指定文件的向量
 
 **存储文件**：
-- `data/faiss_index.bin` - FAISS索引文件
-- `data/metadata.json` - 元数据文件
+- `local_data/faiss_index.bin` - FAISS索引文件
+- `local_data/metadata.json` - 元数据文件
 
 ---
 
@@ -115,7 +115,7 @@ RAG模块是AI文件搜索器的核心组件，负责文件处理、向量化、
 
 ### 存储配置
 - **索引类型**：FAISS
-- **存储路径**：`data/`
+- **存储路径**：`local_data/`
 - **自动保存**：每次更新后保存
 
 ## 性能优化

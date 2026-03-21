@@ -2,12 +2,10 @@ import sys
 import os
 import time
 
+from backend.utils.path_utils import ensure_project_path
+
 # 确保项目根目录在路径中
-current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(current_dir)
-project_root = os.path.dirname(backend_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+ensure_project_path()
 
 from fastapi import APIRouter, HTTPException, Query
 from api.everything import EverythingClient
@@ -91,13 +89,19 @@ def vector_search(q: str, k: int = 30):
             score = res.get('score', 0)
             similarity = 1 / (1 + score)  # UI顯示的相似度
             file_path = res.get('file_path', 'Unknown')
-            content = res.get('content', '')[:100] + "..."
+            # 兼容前端：同时支持 chunk_text 和 content 字段
+            content = res.get('chunk_text', res.get('content', ''))[:100] + "..."
             print(f"[{i+1}] L2距離: {score:.4f} | 相似度: {similarity:.4f} | File: {file_path}")
             print(f"    Content: {content}")
             print("-" * 30)
         print(f"搜索耗時: {end_time - start_time:.4f}s")
         print("="*50 + "\n")
-
+        
+        # 确保返回结果包含 content 字段以兼容前端
+        for res in results:
+            if 'chunk_text' in res and 'content' not in res:
+                res['content'] = res['chunk_text']
+        
         return {"results": results}
         
     except Exception as e:
