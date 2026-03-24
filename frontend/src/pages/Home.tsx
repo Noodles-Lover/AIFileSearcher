@@ -70,6 +70,7 @@ const Home: React.FC = () => {
   const [chunkVisible, setChunkVisible] = useState(false);
   const [chunkContent, setChunkContent] = useState('');
   const [chunkTitle, setChunkTitle] = useState('');
+  const [chunkData, setChunkData] = useState<any[]>([]);
 
   const handlePreview = async (record: FileItem) => {
     setPreviewTitle(record.name);
@@ -92,10 +93,40 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleViewChunk = (record: FileItem) => {
-    setChunkTitle(`${record.name} - 匹配的分块内容`);
-    setChunkContent(record.content_preview || '無分块内容');
-    setChunkVisible(true);
+  const handleViewChunk = async (record: FileItem) => {
+    if (searchMode !== 'semantic' || !searchQuery.trim()) {
+      message.warning('只能在语义搜索模式下查看分块');
+      return;
+    }
+    
+    try {
+      setChunkTitle(`${record.name} - 匹配的分块内容`);
+      setChunkContent('正在加载分块内容...');
+      setChunkVisible(true);
+      
+      // 获取该文件的所有匹配分块
+      const response = await fetch(`http://localhost:8000/api/file_chunks?q=${encodeURIComponent(searchQuery)}&file_path=${encodeURIComponent(record.path)}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || '获取分块失败');
+      }
+      
+      const chunks = data.chunks || [];
+      
+      if (chunks.length === 0) {
+        setChunkContent('未找到匹配的分块内容');
+        return;
+      }
+      
+      // 准备分块数据用于UI渲染
+      setChunkData(chunks);
+      
+    } catch (error) {
+      console.error('查看分块失败:', error);
+      setChunkContent('加载分块内容失败');
+      message.error('查看分块失败');
+    }
   };
 
   const handlePickFolder = async () => {
@@ -315,6 +346,7 @@ const Home: React.FC = () => {
             file_path: string;
             content: string;
             score: number;
+            chunk_count?: number;
           }, index: number) => ({
             key: index.toString(),
             name: item.file_path.split('\\').pop() || item.file_path.split('/').pop(),
@@ -326,7 +358,8 @@ const Home: React.FC = () => {
             extension: '.' + (item.file_path.split('.').pop() || ''),
             type: 'file',
             score: item.score,
-            content_preview: item.content
+            content_preview: item.content,
+            chunk_count: item.chunk_count || 1
           }));
           setFiles(mappedFiles);
           if (mappedFiles.length === 0) {
@@ -443,6 +476,9 @@ const Home: React.FC = () => {
             <Text strong>{text}</Text>
             {searchMode === 'semantic' && record.score && (
               <Tag color="green">相似度: {(1 / (1 + record.score)).toFixed(4)}</Tag>
+            )}
+            {searchMode === 'semantic' && record.chunk_count && record.chunk_count > 1 && (
+              <Tag color="orange">{record.chunk_count}个分块</Tag>
             )}
           </Space>
           {searchMode === 'semantic' && record.content_preview && (
@@ -751,18 +787,47 @@ const Home: React.FC = () => {
         placement="center"
         height={600}
       >
-        <pre style={{ 
-          whiteSpace: 'pre-wrap', 
-          wordWrap: 'break-word',
-          fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-          fontSize: '14px',
-          backgroundColor: '#f0f9ff',
-          padding: '12px',
-          borderRadius: '4px',
-          border: '1px solid #e6f7ff'
-        }}>
-          {chunkContent}
-        </pre>
+        <div style={{ maxHeight: '500px' }}>
+          <div style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
+            找到 {chunkData.length} 个匹配分块:
+          </div>
+          
+          {chunkData.map((chunk: any, index: number) => {
+            const score = chunk.score || 0;
+            const similarity = (1 / (1 + score)).toFixed(4);
+            const chunkIndex = chunk.chunk_index || index;
+            const chunkText = chunk.content || chunk.chunk_text || '';
+            
+            return (
+              <div key={index} style={{ 
+                marginBottom: '16px',
+                padding: '12px',
+                backgroundColor: '#f0f9ff',
+                borderRadius: '6px',
+                border: '4px groove #00aeff'
+              }}>
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 'bold', 
+                  marginBottom: '8px',
+                  color: '#1890ff',
+                }}>
+                  [分块 {chunkIndex + 1}] 相似度: {similarity}
+                </div>
+                <pre style={{ 
+                  margin: 0,
+                  whiteSpace: 'pre-wrap', 
+                  wordWrap: 'break-word',
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: '14px',
+                  lineHeight: '1.4',
+                }}>
+                  {chunkText}
+                </pre>
+              </div>
+            );
+          })}
+        </div>
       </CustomModal>
 
       {/* 路径输入模态框 */}

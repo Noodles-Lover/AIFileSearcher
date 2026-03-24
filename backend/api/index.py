@@ -233,6 +233,17 @@ async def index_folder(request: dict):
             # 发送完成事件
             completion_msg = f'索引完成！處理了 {processed_count} 個文件，跳過了 {skipped_count} 個文件'
             print(f"🎉 {completion_msg}")
+            
+            # 添加总分块数统计
+            try:
+                store = system.get_vector_store()
+                if store and hasattr(store, 'index') and store.index:
+                    total_chunks = store.index.ntotal
+                    print(f"📊 數據庫統計: 總分塊數 {total_chunks}")
+            except Exception as stats_error:
+                print(f"⚠️ 無法獲取分塊統計: {stats_error}")
+            
+            
             yield f"data: {json.dumps({'status': 'complete', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': completion_msg})}\n\n"
             await asyncio.sleep(0)
             

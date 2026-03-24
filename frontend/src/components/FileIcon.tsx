@@ -23,6 +23,7 @@ interface FileItem {
   type: 'file' | 'folder';
   score?: number;
   content_preview?: string;
+  chunk_count?: number;
 }
 
 interface FileIconProps {
