@@ -4,6 +4,7 @@ import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip,
 import CustomModal from '../components/CustomModal';
 import FileIcon, { type FileItem } from '../components/FileIcon';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
+import { processFilenameSearchResults, processSemanticSearchResults } from '../utils/fileUtils';
 import '../styles/progress.css';
 
 interface PreviewResponse {
@@ -308,26 +309,7 @@ const Home: React.FC = () => {
               throw new Error(errorMessage);
             }
             
-            const mappedFiles = data.results.map((item: {
-              name: string;
-              path: string;
-              size: string;
-              size_bytes: number;
-              modified: string;
-              type: string;
-            }, index: number) => ({
-              key: index.toString(),
-              name: item.name,
-              path: item.path,
-              size: item.size,
-              size_bytes: item.size_bytes,
-              modified: item.modified,
-              created: item.modified,
-              extension: item.type === 'folder' ? '' : '.' + (item.name.split('.').pop() || ''),
-              type: item.type,
-              score: undefined,
-              content_preview: undefined
-            }));
+            const mappedFiles = processFilenameSearchResults(data.results, path);
             setFiles(mappedFiles);
           } else {
             setLoading(false);
@@ -342,25 +324,7 @@ const Home: React.FC = () => {
             message.warning(data.msg);
           }
           
-          const mappedFiles = (data.results || []).map((item: {
-            file_path: string;
-            content: string;
-            score: number;
-            chunk_count?: number;
-          }, index: number) => ({
-            key: index.toString(),
-            name: item.file_path.split('\\').pop() || item.file_path.split('/').pop(),
-            path: item.file_path,
-            size: '-',
-            size_bytes: 0,
-            modified: '-',
-            created: '-',
-            extension: '.' + (item.file_path.split('.').pop() || ''),
-            type: 'file',
-            score: item.score,
-            content_preview: item.content,
-            chunk_count: item.chunk_count || 1
-          }));
+          const mappedFiles = processSemanticSearchResults(data.results, path);
           setFiles(mappedFiles);
           if (mappedFiles.length === 0) {
             message.info('未找到相關內容');
@@ -390,26 +354,7 @@ const Home: React.FC = () => {
           throw new Error(data.detail || '搜索失敗');
         }
         
-        const mappedFiles = data.results.map((item: {
-          name: string;
-          path: string;
-          size: string;
-          size_bytes: number;
-          modified: string;
-          type: string;
-          created?: string;
-          extension?: string;
-        }, index: number) => ({
-          key: index.toString(),
-          name: item.name,
-          path: item.path,
-          size: item.size,
-          size_bytes: item.size_bytes,
-          modified: item.modified,
-          created: item.created || '-',
-          extension: item.extension || '',
-          type: item.type
-        }));
+        const mappedFiles = processFilenameSearchResults(data.results, path);
         
         setFiles(mappedFiles);
         if (mappedFiles.length === 0) {
@@ -500,9 +445,9 @@ const Home: React.FC = () => {
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: '位置',
-      dataIndex: 'path',
-      key: 'path',
+      title: '相对位置',
+      dataIndex: 'relativePath',
+      key: 'relativePath',
       ellipsis: true,
       render: (text) => (
         <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>
@@ -615,11 +560,6 @@ const Home: React.FC = () => {
         </Space>
         
         <Space size="small">
-          {currentPath && (
-            <Tag closable onClose={clearPath} color="blue" style={{ padding: '4px 10px', fontSize: '13px', borderRadius: '4px' }}>
-              範圍: {currentPath.length > 30 ? '...' + currentPath.slice(-30) : currentPath}
-            </Tag>
-          )}
           <Button 
             icon={<ThunderboltOutlined />} 
             onClick={() => handleIndexFolder(currentPath || '')}
@@ -654,6 +594,18 @@ const Home: React.FC = () => {
       </Header>
 
       <Content style={{ flex: 1, background: '#fff', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {currentPath && (
+          <div style={{ 
+            padding: '12px 24px', 
+            borderBottom: '1px solid #f0f0f0',
+            background: '#fafafa',
+            flexShrink: 0
+          }}>
+            <Text strong style={{ fontSize: '14px', color: '#1890ff' }}>
+              📁 {currentPath}
+            </Text>
+          </div>
+        )}
         <Table 
           columns={columns} 
           dataSource={files} 
@@ -667,7 +619,7 @@ const Home: React.FC = () => {
             style: { margin: '12px 16px' }
           }}
           size="middle"
-          scroll={{ y: 'calc(100vh - 64px - 55px - 56px)' }}
+          scroll={{ y: 'calc(100vh - 64px - 55px - 56px - ' + (currentPath ? '50px' : '0px') }}
           onRow={(record) => ({
             onDoubleClick: () => handleOpenFile(record.path),
           })}

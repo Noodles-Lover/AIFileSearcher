@@ -41,35 +41,36 @@ def search_files(q: str = "", count: int = 100, parent_path: str = None):
 @router.get("/api/list")
 def list_files(parent_path: str = ""):
     """
-    列出指定目錄下的文件
+    列出指定目錄下的文件（递归遍历子文件夹）
     """
     try:
-        # 首先尝试使用 Everything
-        results = client.get_files_in_folder(parent_path)
+        # 首先尝试使用 Everything (递归遍历)
+        results = client.get_files_in_folder(parent_path, recursive=True)
         
         if results == "CONNECTION_ERROR":
-            # 如果 Everything 不可用，使用 Python 的 os.listdir 作为备用
+            # 如果 Everything 不可用，使用 Python 的 os.walk 作为备用（递归遍历）
             import os
             if not parent_path or not os.path.exists(parent_path):
                 return {"results": []}
             
             results = []
             try:
-                for item in os.listdir(parent_path):
-                    item_path = os.path.join(parent_path, item)
-                    if os.path.exists(item_path):
-                        stat = os.stat(item_path)
-                        is_dir = os.path.isdir(item_path)
-                        
-                        file_info = {
-                            "name": item,
-                            "path": item_path,
-                            "size": "0 B" if is_dir else format_size(stat.st_size),
-                            "size_bytes": 0 if is_dir else stat.st_size,
-                            "modified": format_time(stat.st_mtime),
-                            "type": "folder" if is_dir else "file"
-                        }
-                        results.append(file_info)
+                # 使用 os.walk 递归遍历所有子文件夹
+                for root, dirs, files in os.walk(parent_path):
+                    # 处理当前目录中的文件
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        if os.path.exists(file_path):
+                            stat = os.stat(file_path)
+                            file_info = {
+                                "name": file,
+                                "path": file_path,
+                                "size": format_size(stat.st_size),
+                                "size_bytes": stat.st_size,
+                                "modified": format_time(stat.st_mtime),
+                                "type": "file"
+                            }
+                            results.append(file_info)
             except PermissionError:
                 # 如果没有权限访问，返回空列表
                 results = []

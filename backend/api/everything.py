@@ -14,7 +14,7 @@ class EverythingClient:
         self.base_url = f"http://{host}:{port}"
         self.auth = (username, password) if username and password else None
         
-    def search(self, query, count=100, offset=0, sort='name', ascending=True):
+    def search(self, query, count=1000, offset=0, sort='name', ascending=True):
         """
         执行搜索请求
         """
@@ -68,10 +68,10 @@ class EverythingClient:
             # 递归搜索：直接使用路径加反斜杠，Everything 会匹配该路径下的所有内容
             if not clean_path.endswith('\\'):
                 clean_path += '\\'
-            query = f'"{clean_path}"'
+            query = f'"{clean_path}" !folder:'
         else:
             # 非递归：使用 parent: 语法
-            query = f'parent:"{clean_path}"'
+            query = f'parent:"{clean_path}" !folder:'
             
         return self.search(query)
 
@@ -91,6 +91,10 @@ class EverythingClient:
             attributes = int(item.get('attributes', 0))
             is_folder = (attributes & 16) != 0
             
+            # 过滤掉文件夹
+            if is_folder:
+                continue
+
             # 提取扩展名 (包含点，例如 .jpg)
             name = item.get('name', '')
             extension = os.path.splitext(name)[1].lower() if not is_folder else ''
@@ -99,10 +103,12 @@ class EverythingClient:
             if attributes == 0 and item.get('size') is None:
                 is_folder = True
                 extension = ''
+                # 过滤掉文件夹
+                continue
 
             formatted.append({
                 'name': name,
-                'path': f"{item.get('path')}\\{name}" if item.get('path') else name,
+                'path': f"{item.get('path')}\{name}" if item.get('path') else name,
                 'size': self._format_size(size_bytes),
                 'size_bytes': size_bytes,
                 'modified': self._filetime_to_datetime(item.get('date_modified')),
