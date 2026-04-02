@@ -190,7 +190,7 @@ def get_file_chunks(q: str, file_path: str):
         # 1. 生成查詢向量
         query_vector = embedder.encode(q)[0]
         
-        # 2. 搜索所有分块 (获取更多结果以确保包含该文件的所有分块)
+        # 2. 搜索所有分块 (获取更多结果以确保包含该文件的所有匹配分块)
         all_chunks = store.search(query_vector, k=1000)  # 获取1000个分块
         
         # 3. 筛选出指定文件的所有分块
@@ -216,27 +216,39 @@ def get_file_chunks(q: str, file_path: str):
 def merge_chunks_by_file(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     按文件合併分块結果，每個文件只保留最佳分块
-    :param chunks: 分块結果列表
-    :return: 按文件合併後的結果列表
     """
-    file_dict = {}  # {file_path: best_chunk}
+    file_dict = {}  # {file_path: {best_chunk, all_chunks}}
     
     for chunk in chunks:
         file_path = chunk.get('file_path', '')
         score = chunk.get('score', float('inf'))
         
         # 如果是第一次見到這個文件，或者當前分块的分數更好，則保存
-        if file_path not in file_dict or score < file_dict[file_path]['score']:
-            # 複製分块信息並添加額外統計信息
-            merged_chunk = chunk.copy()
-            merged_chunk['chunk_count'] = 1  # 初始化分块計數
-            file_dict[file_path] = merged_chunk
+        if file_path not in file_dict:
+            # 初始化文件記錄
+            file_dict[file_path] = {
+                'best_chunk': chunk.copy(),
+                'all_chunks': [chunk.copy()]
+            }
+            file_dict[file_path]['best_chunk']['chunk_count'] = 1
+        elif score < file_dict[file_path]['best_chunk']['score']:
+            # 更新最佳分块
+            file_dict[file_path]['best_chunk'] = chunk.copy()
+            file_dict[file_path]['best_chunk']['chunk_count'] = len(file_dict[file_path]['all_chunks']) + 1
+            file_dict[file_path]['all_chunks'].append(chunk.copy())
         else:
-            # 更新分块計數
-            file_dict[file_path]['chunk_count'] += 1
+            # 添加到分块列表
+            file_dict[file_path]['all_chunks'].append(chunk.copy())
+            file_dict[file_path]['best_chunk']['chunk_count'] += 1
     
-    # 轉換為列表並按分數排序
-    merged_results = list(file_dict.values())
+    # 转换为列表并按分数排序
+    merged_results = []
+    for file_path, data in file_dict.items():
+        # 将所有分块添加到结果中
+        best_chunk = data['best_chunk']
+        best_chunk['all_chunks'] = data['all_chunks']
+        merged_results.append(best_chunk)
+    
     merged_results.sort(key=lambda x: x['score'])
     
     return merged_results

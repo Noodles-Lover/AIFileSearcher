@@ -13,6 +13,8 @@ export const API_ENDPOINTS = {
   
   // 索引相关
   INDEX_FOLDER: `${API_BASE_URL}/api/index_folder`,
+  INDEXED_FOLDERS: `${API_BASE_URL}/api/indexed_folders`,
+  REMOVE_INDEXED_FOLDER: `${API_BASE_URL}/api/remove_indexed_folder`,
   CLEAR_INDEX: `${API_BASE_URL}/api/clear_index`,
   CLEAR_CACHE: `${API_BASE_URL}/api/clear_cache`,
   

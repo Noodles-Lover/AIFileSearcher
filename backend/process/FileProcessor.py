@@ -4,6 +4,7 @@ from .BaseParser import BaseParser
 from .TXTParser import TXTParser
 from .PDFParser import PDFParser
 from .DocxParser import DocxParser
+from .DocParser import DocParser
 from .PPTParser import PPTParser
 from .MDParser import MDParser
 from .ChunkingStrategy import ChunkingStrategy, FixedSizeChunking, ParagraphChunking, SentenceChunking
@@ -19,6 +20,7 @@ class FileProcessor:
         '.txt': TXTParser,
         '.pdf': PDFParser,
         '.docx': DocxParser,
+        '.doc': DocParser,
         '.pptx': PPTParser,
         '.md': MDParser,
     }
@@ -34,9 +36,10 @@ class FileProcessor:
         self.type_strategies = {
             '.md': ParagraphChunking(),
             '.txt': FixedSizeChunking(chunk_size=1000, overlap=100),
-            # PDF/Docx/PPTX 結構較複雜，固定大小分塊較爲穩妥
+            # PDF/Docx/Doc/PPTX 結構較複雜，固定大小分塊較爲穩妥
             '.pdf': FixedSizeChunking(chunk_size=500, overlap=50),
             '.docx': FixedSizeChunking(chunk_size=500, overlap=50),
+            '.doc': FixedSizeChunking(chunk_size=500, overlap=50),
             '.pptx': FixedSizeChunking(chunk_size=500, overlap=50),
         }
 
@@ -45,6 +48,21 @@ class FileProcessor:
         检查文件是否支持
         """
         ext = os.path.splitext(file_path)[1].lower()
+        # 特殊处理 .doc 文件：需要 textract 或 win32com 支持
+        if ext == '.doc':
+            try:
+                # 尝试导入 textract 或 win32com
+                try:
+                    import textract
+                    return True
+                except ImportError:
+                    try:
+                        import win32com.client
+                        return True
+                    except ImportError:
+                        return False
+            except:
+                return False
         return ext in self.PARSERS
 
     def process_file(self, file_path: str, chunking_strategy: Optional[ChunkingStrategy] = None) -> Dict:

@@ -9,6 +9,7 @@ from backend.RAG.SystemManager import system
 from backend.RAG.FileCache import FileCache
 from backend.process.FileProcessor import FileProcessor
 from backend.utils.path_utils import get_project_root, get_data_path
+from backend.utils.IndexedFoldersManager import folders_manager
 
 router = APIRouter()
 
@@ -57,6 +58,9 @@ def clear_index():
             os.remove(cache_path)
             files_deleted.append("file_cache.json")
         
+        # 清空已索引文件夹记录
+        folders_manager.clear()
+        
         # 清空系统管理器中的向量存储实例（如果已初始化）
         if system.is_initialized and system.vector_store:
             system.vector_store.index = None
@@ -74,6 +78,73 @@ def clear_index():
     except Exception as e:
         print(f"清空索引时出错: {e}")
         return {"error": f"清空索引失败: {str(e)}"}
+
+@router.get("/api/indexed_folders")
+def get_indexed_folders():
+    """
+    获取所有已索引的根文件夹路径
+    """
+    try:
+        folders = folders_manager.get_indexed_folders()
+        return {"folders": sorted(folders)}
+    except Exception as e:
+        print(f"获取已索引文件夹时出错: {e}")
+        return {"error": f"获取已索引文件夹失败: {str(e)}"}
+
+@router.post("/api/remove_indexed_folder")
+def remove_indexed_folder(request: dict):
+    """
+    删除指定文件夹的所有索引数据
+    """
+    try:
+        folder_path = request.get("path", "").strip()
+        if not folder_path:
+            return {"error": "路径不能为空"}
+
+        # 规范化路径
+        folder_path = os.path.normpath(folder_path)
+
+        cache_path = get_data_path("file_cache.json")
+        if not os.path.exists(cache_path):
+            return {"success": True, "message": "没有需要删除的索引数据"}
+
+        file_cache = FileCache(cache_path)
+        all_files = file_cache.get_all_files()
+
+        # 找出属于该文件夹的所有文件
+        normalized_folder = folder_path.replace("/", "\\").lower()
+        files_to_remove = [
+            f for f in all_files
+            if os.path.normpath(f).replace("/", "\\").lower().startswith(normalized_folder + "\\")
+            or os.path.normpath(f).replace("/", "\\").lower() == normalized_folder
+        ]
+
+        if not files_to_remove:
+            return {"success": True, "message": f"未找到 {folder_path} 下的索引数据"}
+
+        # 收集需要删除的向量索引
+        indices_to_remove = set()
+        for file_path in files_to_remove:
+            indices = file_cache.get_file_vectors(file_path)
+            indices_to_remove.update(indices)
+            file_cache.remove_file_cache(file_path)
+
+        # 从向量数据库中删除对应的向量
+        if system.is_initialized and system.vector_store and system.vector_store.index and indices_to_remove:
+            system.vector_store.remove_vectors_by_indices(list(indices_to_remove))
+            system.vector_store.save()
+
+        # 从已索引文件夹记录中移除
+        folders_manager.remove_folder(folder_path)
+
+        return {
+            "success": True,
+            "message": f"已删除 {folder_path} 的索引数据（{len(files_to_remove)} 个文件，{len(indices_to_remove)} 个向量）"
+        }
+
+    except Exception as e:
+        print(f"删除文件夹索引时出错: {e}")
+        return {"error": f"删除文件夹索引失败: {str(e)}"}
 
 @router.post("/api/index_folder")
 async def index_folder(request: dict):
@@ -164,10 +235,8 @@ async def index_folder(request: dict):
                                     for j, chunk in enumerate(chunks):
                                         metadata = {
                                             'file_path': file_path,
-                                            'file_name': file_name,
                                             'chunk_index': j,
-                                            'chunk_text': chunk,
-                                            'total_chunks': len(chunks)
+                                            'chunk_text': chunk
                                         }
                                         metas.append(metadata)
                                     
@@ -229,6 +298,10 @@ async def index_folder(request: dict):
             except Exception as cache_error:
                 yield f"data: {json.dumps({'status': 'error', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': f'缓存保存失败: {str(cache_error)}'})}\n\n"
                 await asyncio.sleep(0)
+            
+            # 记录已索引的文件夹
+            if processed_count > 0:
+                folders_manager.add_folder(folder_path)
             
             # 发送完成事件
             completion_msg = f'索引完成！處理了 {processed_count} 個文件，跳過了 {skipped_count} 個文件'

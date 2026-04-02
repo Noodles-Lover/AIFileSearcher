@@ -105,23 +105,29 @@ const Home: React.FC = () => {
       setChunkContent('正在加载分块内容...');
       setChunkVisible(true);
       
-      // 获取该文件的所有匹配分块
-      const response = await fetch(`http://localhost:8000/api/file_chunks?q=${encodeURIComponent(searchQuery)}&file_path=${encodeURIComponent(record.path)}`);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.detail || '获取分块失败');
+      // 检查是否有存储的分块
+      if (record.all_chunks && record.all_chunks.length > 0) {
+        // 使用存储的分块
+        setChunkData(record.all_chunks);
+      } else {
+        // 回退到API请求
+        const response = await fetch(`http://localhost:8000/api/file_chunks?q=${encodeURIComponent(searchQuery)}&file_path=${encodeURIComponent(record.path)}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || '获取分块失败');
+        }
+        
+        const chunks = data.chunks || [];
+        
+        if (chunks.length === 0) {
+          setChunkContent('未找到匹配的分块内容');
+          return;
+        }
+        
+        // 准备分块数据用于UI渲染
+        setChunkData(chunks);
       }
-      
-      const chunks = data.chunks || [];
-      
-      if (chunks.length === 0) {
-        setChunkContent('未找到匹配的分块内容');
-        return;
-      }
-      
-      // 准备分块数据用于UI渲染
-      setChunkData(chunks);
       
     } catch (error) {
       console.error('查看分块失败:', error);

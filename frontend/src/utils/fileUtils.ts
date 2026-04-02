@@ -19,7 +19,15 @@ export const getRelativePath = (filePath: string, currentPath: string | null): s
   if (normalizedFilePath.startsWith(normalizedCurrentPath)) {
     const relPath = normalizedFilePath.substring(normalizedCurrentPath.length).replace(/^\//, '');
     if (relPath) {
-      return `.../${relPath}`;
+      // 提取目录部分，去掉文件名
+      const lastSlashIndex = relPath.lastIndexOf('/');
+      if (lastSlashIndex > 0) {
+        const dirPath = relPath.substring(0, lastSlashIndex);
+        return `.../${dirPath}/`;
+      } else if (lastSlashIndex === 0) {
+        // 直接在当前目录下
+        return `.../`;
+      }
     }
   }
   
@@ -72,7 +80,8 @@ export const processSemanticSearchResults = (results: any[], currentPath: string
       type: 'file',
       score: item.score,
       content_preview: item.content,
-      chunk_count: item.chunk_count || 1
+      chunk_count: item.chunk_count || 1,
+      all_chunks: item.all_chunks || []
     };
   });
 };

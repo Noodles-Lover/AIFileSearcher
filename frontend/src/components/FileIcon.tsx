@@ -24,6 +24,7 @@ interface FileItem {
   score?: number;
   content_preview?: string;
   chunk_count?: number;
+  all_chunks?: any[];
 }
 
 interface FileIconProps {
