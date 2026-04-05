@@ -12,19 +12,22 @@ export const getRelativePath = (filePath: string, currentPath: string | null): s
   }
   
   // 规范化路径，统一处理路径分隔符
-  const normalizedCurrentPath = currentPath.replace(/\\/g, '/').replace(/\/$/, '');
-  const normalizedFilePath = filePath.replace(/\\/g, '/');
+  const normalizedCurrentPath = currentPath.replace(/[\\/]/g, '/').replace(/\/$/, '');
+  const normalizedFilePath = filePath.replace(/[\\/]/g, '/');
   
   // 计算相对路径
   if (normalizedFilePath.startsWith(normalizedCurrentPath)) {
     const relPath = normalizedFilePath.substring(normalizedCurrentPath.length).replace(/^\//, '');
+    // 如果有相对路径，不管是否有子目录，都返回 .../
+    // 对于直接在当前目录下的文件，返回 .../
+    // 对于子目录中的文件，提取目录部分
     if (relPath) {
       // 提取目录部分，去掉文件名
       const lastSlashIndex = relPath.lastIndexOf('/');
       if (lastSlashIndex > 0) {
         const dirPath = relPath.substring(0, lastSlashIndex);
         return `.../${dirPath}/`;
-      } else if (lastSlashIndex === 0) {
+      } else {
         // 直接在当前目录下
         return `.../`;
       }
@@ -72,9 +75,9 @@ export const processSemanticSearchResults = (results: any[], currentPath: string
       name: fileName,
       path: item.file_path,
       relativePath: getRelativePath(item.file_path, currentPath),
-      size: '-',
-      size_bytes: 0,
-      modified: '-',
+      size: item.size || '-',
+      size_bytes: item.size_bytes || 0,
+      modified: item.modified || '-',
       created: '-',
       extension: '.' + (item.file_path.split('.').pop() || ''),
       type: 'file',

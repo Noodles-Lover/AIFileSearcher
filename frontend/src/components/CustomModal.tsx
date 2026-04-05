@@ -104,7 +104,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
           top: '50%',
           left: '50%',
           width: width || 600,
-          height: height,
+          height: height || 'auto',
           borderRadius: '8px',
           maxHeight: '80vh'
         };

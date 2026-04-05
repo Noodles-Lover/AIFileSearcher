@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Spin, Progress, Radio } from 'antd';
+import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip, Dropdown, Spin, Progress, DatePicker, Select } from 'antd';
 import CustomModal from '../components/CustomModal';
 import FileIcon, { type FileItem } from '../components/FileIcon';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
-import { processFilenameSearchResults, processSemanticSearchResults } from '../utils/fileUtils';
+import { processSemanticSearchResults, getRelativePath } from '../utils/fileUtils';
 import '../styles/progress.css';
 
 interface PreviewResponse {
@@ -24,23 +24,26 @@ interface SetFolderResponse {
   message?: string;
   error?: string;
 }
+
 import { 
   SearchOutlined, 
   FolderOpenOutlined, 
   SettingOutlined, 
   FileOutlined,
   MoreOutlined,
-  GlobalOutlined,
   EyeOutlined,
   DatabaseOutlined,
   ThunderboltOutlined,
   LoadingOutlined,
-  DownOutlined
+  DownOutlined,
+  FunnelPlotOutlined,
+  ClearOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -48,18 +51,21 @@ const Home: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
-  const [searchMode, setSearchMode] = useState<'filename' | 'semantic'>('filename');
   const [showPathInput, setShowPathInput] = useState(false);
   const [inputPath, setInputPath] = useState('');
+
+  // Filter State
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filterExtensions, setFilterExtensions] = useState('');
+  const [filterMinSize, setFilterMinSize] = useState<number | null>(null);
+  const [filterMaxSize, setFilterMaxSize] = useState<number | null>(null);
+  const [filterMinSizeUnit, setFilterMinSizeUnit] = useState<string>('B');
+  const [filterMaxSizeUnit, setFilterMaxSizeUnit] = useState<string>('B');
+  const [filterDateRange, setFilterDateRange] = useState<[Date | null, Date | null]>([null, null]);
 
   // Indexing State
   const [indexing, setIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState({ status: '', current: 0, total: 0, file: '', percent: 0, msg: '' });
-
-  // 切换搜索模式
-  const handleSearchModeChange = (mode: 'filename' | 'semantic') => {
-    setSearchMode(mode);
-  };
 
   // Preview State
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -72,6 +78,17 @@ const Home: React.FC = () => {
   const [chunkContent, setChunkContent] = useState('');
   const [chunkTitle, setChunkTitle] = useState('');
   const [chunkData, setChunkData] = useState<any[]>([]);
+
+  const convertSizeToBytes = (size: number | null, unit: string): number | null => {
+    if (size === null) return null;
+    const multipliers: { [key: string]: number } = {
+      'B': 1,
+      'KB': 1024,
+      'MB': 1024 * 1024,
+      'GB': 1024 * 1024 * 1024
+    };
+    return size * (multipliers[unit] || 1);
+  };
 
   const handlePreview = async (record: FileItem) => {
     setPreviewTitle(record.name);
@@ -95,8 +112,8 @@ const Home: React.FC = () => {
   };
 
   const handleViewChunk = async (record: FileItem) => {
-    if (searchMode !== 'semantic' || !searchQuery.trim()) {
-      message.warning('只能在语义搜索模式下查看分块');
+    if (!searchQuery.trim()) {
+      message.warning('只能在搜索后查看分块');
       return;
     }
     
@@ -298,73 +315,71 @@ const Home: React.FC = () => {
     setFiles([]);
     
     try {
-      if (searchMode === 'semantic') {
-        if (!query) {
-          // 如果语义搜索模式下没有查询词但有路径，则显示文件夹内容
-          if (path) {
-            const params = new URLSearchParams();
-            params.append('parent_path', path);
-            const url = `http://localhost:8000/api/list?${params.toString()}`;
-            
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (!response.ok) {
-              const errorMessage = data.detail || data.message || '获取文件列表失败';
-              console.error('List API Error:', { status: response.status, data });
-              throw new Error(errorMessage);
-            }
-            
-            const mappedFiles = processFilenameSearchResults(data.results, path);
-            setFiles(mappedFiles);
-          } else {
-            setLoading(false);
-            return;
-          }
-        } else {
-          // 有查询词，执行语义搜索
-          const response = await fetch(`http://localhost:8000/api/vector_search?q=${encodeURIComponent(query)}&k=30`);
+      if (!query) {
+        // 如果没有查询词但有路径，则列出文件夹内容
+        if (path) {
+          const params = new URLSearchParams();
+          params.append('parent_path', path);
+          const url = `http://localhost:8000/api/list?${params.toString()}`;
+          
+          const response = await fetch(url);
           const data = await response.json();
           
-          if (data.msg) {
-            message.warning(data.msg);
+          if (!response.ok) {
+            const errorMessage = data.detail || data.message || '获取文件列表失败';
+            console.error('List API Error:', { status: response.status, data });
+            throw new Error(errorMessage);
           }
           
-          const mappedFiles = processSemanticSearchResults(data.results, path);
+          const mappedFiles = data.results.map((item: any) => ({
+            name: item.name,
+            path: item.path,
+            type: item.type,
+            size: item.size,
+            modified: item.modified,
+            size_bytes: item.size_bytes,
+            relativePath: getRelativePath(item.path, path)
+          }));
           setFiles(mappedFiles);
           if (mappedFiles.length === 0) {
-            message.info('未找到相關內容');
+            message.info('文件夹为空');
           }
-        }
-        
-      } else {
-        const params = new URLSearchParams();
-        if (query) params.append('q', query);
-        if (path) params.append('parent_path', path);
-        
-        let url = `http://localhost:8000/api/search?${params.toString()}`;
-        
-        if (!query && path) {
-          // 有路径无查询词，显示文件夹内容
-          url = `http://localhost:8000/api/list?parent_path=${encodeURIComponent(path)}`;
-        } else if (!query && !path) {
-          // 无路径无查询词，不进行全盘搜索
+        } else {
+          message.warning('请先选择文件夹或输入搜索关键词');
           setLoading(false);
           return;
         }
-
+      } else {
+        // 执行语义搜索
+        const params = new URLSearchParams();
+        params.append('q', query);
+        params.append('k', '30');
+        params.append('decay_rate', '-1');  // 使用设置中的值
+        
+        if (filterExtensions) {
+          // 将空格分隔的扩展名转换为逗号分隔
+          const extensions = filterExtensions.split(/\s+/).filter(ext => ext.trim()).join(',');
+          params.append('file_extensions', extensions);
+        }
+        const minSizeBytes = convertSizeToBytes(filterMinSize, filterMinSizeUnit);
+        const maxSizeBytes = convertSizeToBytes(filterMaxSize, filterMaxSizeUnit);
+        if (minSizeBytes) params.append('min_size', minSizeBytes.toString());
+        if (maxSizeBytes) params.append('max_size', maxSizeBytes.toString());
+        if (filterDateRange[0] && filterDateRange[0] instanceof Date) params.append('min_modified', Math.floor(filterDateRange[0].getTime() / 1000).toString());
+        if (filterDateRange[1] && filterDateRange[1] instanceof Date) params.append('max_modified', Math.floor(filterDateRange[1].getTime() / 1000).toString());
+        
+        const url = `http://localhost:8000/api/vector_search?${params.toString()}`;
         const response = await fetch(url);
         const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.detail || '搜索失敗');
+        
+        if (data.msg) {
+          message.warning(data.msg);
         }
         
-        const mappedFiles = processFilenameSearchResults(data.results, path);
-        
+        const mappedFiles = processSemanticSearchResults(data.results, path);
         setFiles(mappedFiles);
         if (mappedFiles.length === 0) {
-          message.info('未找到匹配的文件');
+          message.info('未找到相關內容');
         }
       }
     } catch (error: unknown) {
@@ -394,15 +409,10 @@ const Home: React.FC = () => {
   };
 
   const handleSearch = () => {
-    if (!searchQuery.trim() && !currentPath && searchMode === 'filename') {
-      message.warning('請輸入搜索關鍵詞或選擇文件夾');
+    if (!searchQuery.trim() && !currentPath) {
+      message.warning('请先选择文件夹或输入搜索关键词');
       return;
     }
-    if (!searchQuery.trim() && !currentPath && searchMode === 'semantic') {
-      message.warning('語義搜索需要輸入關鍵詞或選擇文件夾');
-      return;
-    }
-    // 语义搜索模式下，如果没有搜索词但有路径，仍然执行搜索以显示文件夹内容
     performSearch(searchQuery, currentPath);
   };
 
@@ -425,14 +435,14 @@ const Home: React.FC = () => {
           <Space onClick={() => handleOpenFile(record.path)} style={{ cursor: 'pointer' }}>
             <FileIcon record={record} />
             <Text strong>{text}</Text>
-            {searchMode === 'semantic' && record.score && (
+            {record.score && (
               <Tag color="green">相似度: {(1 / (1 + record.score)).toFixed(4)}</Tag>
             )}
-            {searchMode === 'semantic' && record.chunk_count && record.chunk_count > 1 && (
+            {record.chunk_count && record.chunk_count > 1 && (
               <Tag color="orange">{record.chunk_count}个分块</Tag>
             )}
           </Space>
-          {searchMode === 'semantic' && record.content_preview && (
+          {record.content_preview && (
             <Text 
               type="secondary" 
               style={{ 
@@ -503,7 +513,7 @@ const Home: React.FC = () => {
                 label: '查看分块',
                 icon: <DatabaseOutlined />,
                 onClick: () => handleViewChunk(record),
-                disabled: record.type === 'folder' || searchMode !== 'semantic' || !record.content_preview
+                disabled: record.type === 'folder' || !record.content_preview
               },
               {
                 key: 'explorer',
@@ -537,42 +547,27 @@ const Home: React.FC = () => {
       }}>
         <Space size="middle" style={{ flex: 1, maxWidth: '800px' }}>
           <Input 
-            prefix={searchMode === 'filename' ? <SearchOutlined style={{ color: '#bfbfbf' }} /> : <ThunderboltOutlined style={{ color: '#52c41a' }} />}
+            prefix={<ThunderboltOutlined style={{ color: '#52c41a' }} />}
             placeholder={
-              searchMode === 'filename' 
-                ? (currentPath ? `在 ${currentPath.split('\\').pop()} 中搜索...` : "搜索本地文件 (Everything)...")
-                : (currentPath ? "輸入語義關鍵詞進行智能搜索，或留空显示文件列表..." : "輸入語義關鍵詞進行智能搜索...")
+              currentPath 
+                ? `在 ${currentPath.split('\\').pop()} 中搜索...`
+                : "輸入語義關鍵詞進行智能搜索..."
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onPressEnter={handleSearch}
             size="large"
             allowClear
-            suffix={
-              !currentPath && searchMode === 'filename' && <Tooltip title="正在使用全盤搜索"><GlobalOutlined style={{ color: '#1890ff' }} /></Tooltip>
-            }
           />
           <Button type="primary" size="large" onClick={handleSearch} loading={loading}>
             搜索
           </Button>
-          <Radio.Group 
-            value={searchMode} 
-            onChange={(e) => handleSearchModeChange(e.target.value)}
-            buttonStyle="solid"
-          >
-            <Radio.Button value="filename">文件名</Radio.Button>
-            <Radio.Button value="semantic">語義</Radio.Button>
-          </Radio.Group>
-        </Space>
-        
-        <Space size="small">
           <Button 
-            icon={<ThunderboltOutlined />} 
-            onClick={() => handleIndexFolder(currentPath || '')}
-            loading={indexing}
-          >
-            建立索引
-          </Button>
+            icon={<FunnelPlotOutlined />} 
+            onClick={() => setShowFilterModal(true)}
+            type="default"
+            size="large"
+          />
           <Dropdown 
             menu={{
               items: [
@@ -590,11 +585,19 @@ const Home: React.FC = () => {
                 }
               ]
             }}
+            trigger={['click']}
           >
             <Button icon={<FolderOpenOutlined />}>
               文件夹 <DownOutlined />
             </Button>
           </Dropdown>
+          <Button 
+            icon={<ThunderboltOutlined />} 
+            onClick={() => handleIndexFolder(currentPath || '')}
+            loading={indexing}
+          >
+            建立索引
+          </Button>
           <Button type="text" icon={<SettingOutlined style={{ fontSize: '18px' }} />} onClick={() => navigate('/settings')} />
         </Space>
       </Header>
@@ -620,17 +623,9 @@ const Home: React.FC = () => {
             defaultPageSize: 20, 
             showSizeChanger: true, 
             pageSizeOptions: ['10', '20', '50', '100'],
-            showTotal: (total) => `共 ${total} 個項目`,
-            size: 'small',
-            style: { margin: '12px 16px' }
+            showTotal: (total) => `共 ${total} 項`
           }}
-          size="middle"
-          scroll={{ y: 'calc(100vh - 64px - 55px - 56px - ' + (currentPath ? '50px' : '0px') }}
-          onRow={(record) => ({
-            onDoubleClick: () => handleOpenFile(record.path),
-          })}
-          locale={{ emptyText: searchQuery || currentPath ? '沒有找到匹配項' : '請輸入關鍵詞開始搜索' }}
-          style={{ flex: 1 }}
+          style={{ flex: 1, overflow: 'auto' }}
         />
       </Content>
 
@@ -640,7 +635,6 @@ const Home: React.FC = () => {
         open={indexing}
         onClose={() => {}}
         placement="top"
-        height={200}
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -708,9 +702,9 @@ const Home: React.FC = () => {
         </Space>
       </CustomModal>
 
-      {/* 文件预览 - 使用居中弹窗，适合内容查看 */}
+      {/* 预览模态框 */}
       <CustomModal
-        title={`預覽: ${previewTitle || ''}`}
+        title={previewTitle}
         open={previewVisible}
         onClose={() => setPreviewVisible(false)}
         width={800}
@@ -718,84 +712,66 @@ const Home: React.FC = () => {
         height={600}
       >
         {previewLoading ? (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <Spin tip="加載中..." />
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+            <Spin size="large" />
           </div>
         ) : (
           <pre style={{ 
             whiteSpace: 'pre-wrap', 
-            wordWrap: 'break-word',
-            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-            fontSize: '14px',
-            backgroundColor: '#f5f5f5',
-            padding: '12px',
-            borderRadius: '4px'
+            wordBreak: 'break-word',
+            margin: 0,
+            padding: '16px',
+            background: '#f5f5f5',
+            borderRadius: '4px',
+            maxHeight: '500px',
+            overflow: 'auto'
           }}>
             {previewContent}
           </pre>
         )}
       </CustomModal>
 
-      {/* 分块查看 - 使用居中弹窗，适合内容查看 */}
+      {/* 分块查看模态框 */}
       <CustomModal
-        title={chunkTitle || ''}
+        title={chunkTitle}
         open={chunkVisible}
         onClose={() => setChunkVisible(false)}
         width={800}
         placement="center"
         height={600}
       >
-        <div style={{ maxHeight: '500px' }}>
-          <div style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
-            找到 {chunkData.length} 个匹配分块:
-          </div>
-          
-          {chunkData.map((chunk: any, index: number) => {
-            const score = chunk.score || 0;
-            const similarity = (1 / (1 + score)).toFixed(4);
-            const chunkIndex = chunk.chunk_index || index;
-            const chunkText = chunk.content || chunk.chunk_text || '';
-            
-            return (
+        <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+          {chunkData.length > 0 ? (
+            chunkData.map((chunk, index) => (
               <div key={index} style={{ 
-                marginBottom: '16px',
-                padding: '12px',
-                backgroundColor: '#f0f9ff',
-                borderRadius: '6px',
-                border: '4px groove #00aeff'
+                marginBottom: '16px', 
+                padding: '12px', 
+                background: '#f5f5f5', 
+                borderRadius: '4px',
+                border: '1px solid #e8e8e8'
               }}>
-                <div style={{ 
-                  fontSize: '14px', 
-                  fontWeight: 'bold', 
-                  marginBottom: '8px',
-                  color: '#1890ff',
-                }}>
-                  [分块 {chunkIndex + 1}] 相似度: {similarity}
+                <div style={{ marginBottom: '8px' }}>
+                  <Tag color="blue">分块 {chunk.chunk_index !== undefined ? chunk.chunk_index + 1 : index + 1}</Tag>
+                  <Tag color="green">相似度: {(1 / (1 + chunk.score)).toFixed(4)}</Tag>
                 </div>
-                <pre style={{ 
-                  margin: 0,
-                  whiteSpace: 'pre-wrap', 
-                  wordWrap: 'break-word',
-                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-                  fontSize: '14px',
-                  lineHeight: '1.4',
-                }}>
-                  {chunkText}
-                </pre>
+                <Text style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {chunk.chunk_text || chunk.content}
+                </Text>
               </div>
-            );
-          })}
+            ))
+          ) : (
+            <Text>{chunkContent}</Text>
+          )}
         </div>
       </CustomModal>
 
       {/* 路径输入模态框 */}
       <CustomModal
-        title="直接输入文件夹路径"
+        title="输入文件夹路径"
         open={showPathInput}
         onClose={() => setShowPathInput(false)}
         width={500}
         placement="center"
-        height={200}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Text>请输入要索引的文件夹完整路径：</Text>
@@ -826,6 +802,96 @@ const Home: React.FC = () => {
               disabled={!inputPath.trim()}
             >
               确认
+            </Button>
+          </div>
+        </Space>
+      </CustomModal>
+
+      {/* 过滤模态框 */}
+      <CustomModal
+        title="过滤条件"
+        open={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        width={600}
+        placement="center"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>
+            <Text strong>文件扩展名</Text>
+            <Input 
+              placeholder="例如：pdf docx txt（空格分隔）"
+              value={filterExtensions}
+              onChange={(e) => setFilterExtensions(e.target.value)}
+              style={{ marginTop: '8px' }}
+            />
+          </div>
+          
+          <div>
+            <Text strong>文件大小</Text>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <Input 
+                type="number"
+                placeholder="最小大小"
+                value={filterMinSize || ''}
+                onChange={(e) => setFilterMinSize(e.target.value ? parseFloat(e.target.value) : null)}
+                style={{ flex: 1 }}
+              />
+              <Select
+                value={filterMinSizeUnit}
+                onChange={setFilterMinSizeUnit}
+                style={{ width: 80 }}
+                options={[
+                  { value: 'B', label: 'B' },
+                  { value: 'KB', label: 'KB' },
+                  { value: 'MB', label: 'MB' },
+                  { value: 'GB', label: 'GB' }
+                ]}
+              />
+              <Input 
+                type="number"
+                placeholder="最大大小"
+                value={filterMaxSize || ''}
+                onChange={(e) => setFilterMaxSize(e.target.value ? parseFloat(e.target.value) : null)}
+                style={{ flex: 1 }}
+              />
+              <Select
+                value={filterMaxSizeUnit}
+                onChange={setFilterMaxSizeUnit}
+                style={{ width: 80 }}
+                options={[
+                  { value: 'B', label: 'B' },
+                  { value: 'KB', label: 'KB' },
+                  { value: 'MB', label: 'MB' },
+                  { value: 'GB', label: 'GB' }
+                ]}
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Text strong>修改时间</Text>
+            <div style={{ marginTop: '8px' }}>
+              <RangePicker 
+                value={filterDateRange}
+                onChange={(dates) => setFilterDateRange(dates)}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+            <Button 
+              icon={<ClearOutlined />}
+              onClick={() => {
+                setFilterExtensions('');
+                setFilterMinSize(null);
+                setFilterMaxSize(null);
+                setFilterMinSizeUnit('B');
+                setFilterMaxSizeUnit('B');
+                setFilterDateRange([null, null]);
+              }}
+            >
+              清除过滤
             </Button>
           </div>
         </Space>
