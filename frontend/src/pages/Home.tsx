@@ -4,7 +4,8 @@ import { Input, Button, Table, Space, Layout, Typography, message, Tag, Tooltip,
 import CustomModal from '../components/CustomModal';
 import FileIcon, { type FileItem } from '../components/FileIcon';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
-import { processSemanticSearchResults, getRelativePath } from '../utils/fileUtils';
+import { processSemanticSearchResults, getRelativePath, convertSizeToBytes } from '../utils/fileUtils';
+import { generateColumns } from '../utils/fileTableColumns';
 import '../styles/progress.css';
 
 interface PreviewResponse {
@@ -39,7 +40,6 @@ import {
   FunnelPlotOutlined,
   ClearOutlined
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -47,10 +47,14 @@ const { RangePicker } = DatePicker;
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  
+  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
+  
+  // Path Input State
   const [showPathInput, setShowPathInput] = useState(false);
   const [inputPath, setInputPath] = useState('');
 
@@ -79,17 +83,7 @@ const Home: React.FC = () => {
   const [chunkTitle, setChunkTitle] = useState('');
   const [chunkData, setChunkData] = useState<any[]>([]);
 
-  const convertSizeToBytes = (size: number | null, unit: string): number | null => {
-    if (size === null) return null;
-    const multipliers: { [key: string]: number } = {
-      'B': 1,
-      'KB': 1024,
-      'MB': 1024 * 1024,
-      'GB': 1024 * 1024 * 1024
-    };
-    return size * (multipliers[unit] || 1);
-  };
-
+  // 处理文件预览
   const handlePreview = async (record: FileItem) => {
     setPreviewTitle(record.name);
     setPreviewVisible(true);
@@ -111,6 +105,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理查看分块
   const handleViewChunk = async (record: FileItem) => {
     if (!searchQuery.trim()) {
       message.warning('只能在搜索后查看分块');
@@ -153,6 +148,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理选择文件夹
   const handlePickFolder = async () => {
     try {
       // 使用后端API选择文件夹
@@ -183,6 +179,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理设置文件夹
   const handleSetFolder = async (path: string) => {
     if (!path.trim()) {
       message.error('请输入文件夹路径');
@@ -213,6 +210,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理索引文件夹
   const handleIndexFolder = async (path: string) => {
     if (!path) {
       message.warning('请先选择一个文件夹');
@@ -310,6 +308,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 执行搜索
   const performSearch = async (query: string, path: string | null) => {
     setLoading(true);
     setFiles([]);
@@ -390,6 +389,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理打开文件
   const handleOpenFile = async (path: string) => {
     try {
       const response = await fetch(`http://localhost:8000/api/open-file?path=${encodeURIComponent(path)}`);
@@ -399,6 +399,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理打开文件夹
   const handleOpenFolder = async (path: string) => {
     try {
       const response = await fetch(`http://localhost:8000/api/open-folder?path=${encodeURIComponent(path)}`);
@@ -408,6 +409,7 @@ const Home: React.FC = () => {
     }
   };
 
+  // 处理搜索
   const handleSearch = () => {
     if (!searchQuery.trim() && !currentPath) {
       message.warning('请先选择文件夹或输入搜索关键词');
@@ -416,123 +418,24 @@ const Home: React.FC = () => {
     performSearch(searchQuery, currentPath);
   };
 
-
+  // 清除路径
   const clearPath = () => {
     setCurrentPath(null);
     setFiles([]);
     message.info('已切換回全盤搜索模式');
   };
 
-  const columns: ColumnsType<FileItem> = [
-    {
-      title: '名稱',
-      dataIndex: 'name',
-      key: 'name',
-      ellipsis: true,
-      width: '40%',
-      render: (text, record) => (
-        <Space orientation="vertical" size={0} style={{ width: '100%' }}>
-          <Space onClick={() => handleOpenFile(record.path)} style={{ cursor: 'pointer' }}>
-            <FileIcon record={record} />
-            <Text strong>{text}</Text>
-            {record.score && (
-              <Tag color="green">相似度: {(1 / (1 + record.score)).toFixed(4)}</Tag>
-            )}
-            {record.chunk_count && record.chunk_count > 1 && (
-              <Tag color="orange">{record.chunk_count}个分块</Tag>
-            )}
-          </Space>
-          {record.content_preview && (
-            <Text 
-              type="secondary" 
-              style={{ 
-                fontSize: '12px', 
-                marginLeft: 24,
-                cursor: 'pointer',
-                color: '#1890ff'
-              }} 
-              onClick={() => handleViewChunk(record)}
-            >
-              {record.content_preview.length > 200 ? record.content_preview.substring(0, 200) + '...' : record.content_preview}
-            </Text>
-          )}
-        </Space>
-      ),
-      sorter: (a, b) => a.name.localeCompare(b.name),
-    },
-    {
-      title: '相对位置',
-      dataIndex: 'relativePath',
-      key: 'relativePath',
-      ellipsis: true,
-      render: (text) => (
-        <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>
-      ),
-    },
-    {
-      title: '大小',
-      dataIndex: 'size',
-      key: 'size',
-      width: 120,
-      align: 'right',
-      render: (text, record) => record.type === 'folder' ? '-' : (text === '0.00 B' ? '-' : text),
-      sorter: (a, b) => a.size_bytes - b.size_bytes,
-    },
-    {
-      title: '修改時間',
-      dataIndex: 'modified',
-      key: 'modified',
-      width: 180,
-      render: (text) => <Text type="secondary" style={{ fontSize: '12px' }}>{text}</Text>,
-      sorter: (a, b) => a.modified.localeCompare(b.modified),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      align: 'center',
-      render: (_, record) => (
-        <Dropdown
-          menu={{
-            items: [
-              {
-                key: 'open',
-                label: '打開',
-                icon: <FileOutlined />,
-                onClick: () => handleOpenFile(record.path)
-              },
-              {
-                key: 'preview',
-                label: '預覽',
-                icon: <EyeOutlined />,
-                onClick: () => handlePreview(record),
-                disabled: record.type === 'folder'
-              },
-              {
-                key: 'view-chunk',
-                label: '查看分块',
-                icon: <DatabaseOutlined />,
-                onClick: () => handleViewChunk(record),
-                disabled: record.type === 'folder' || !record.content_preview
-              },
-              {
-                key: 'explorer',
-                label: '在資源管理器中打開',
-                icon: <FolderOpenOutlined />,
-                onClick: () => handleOpenFolder(record.path)
-              }
-            ]
-          }}
-          trigger={['click']}
-        >
-          <Button type="text" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
-        </Dropdown>
-      ),
-    },
-  ];
+  // 生成表格列定义
+  const columns = generateColumns({
+    onOpenFile: handleOpenFile,
+    onPreview: handlePreview,
+    onViewChunk: handleViewChunk,
+    onOpenFolder: handleOpenFolder
+  });
 
   return (
     <Layout style={{ height: '100vh', background: '#fff', overflow: 'hidden' }}>
+      {/* 头部区域 */}
       <Header style={{ 
         background: '#fff', 
         padding: '0 24px', 
@@ -551,7 +454,7 @@ const Home: React.FC = () => {
             placeholder={
               currentPath 
                 ? `在 ${currentPath.split('\\').pop()} 中搜索...`
-                : "輸入語義關鍵詞進行智能搜索..."
+                : "输入语义关键词进行智能搜索..."
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -602,6 +505,7 @@ const Home: React.FC = () => {
         </Space>
       </Header>
 
+      {/* 内容区域 */}
       <Content style={{ flex: 1, background: '#fff', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {currentPath && (
           <div style={{ 
@@ -740,15 +644,15 @@ const Home: React.FC = () => {
         placement="center"
         height={600}
       >
-        <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+        <div>
           {chunkData.length > 0 ? (
             chunkData.map((chunk, index) => (
               <div key={index} style={{ 
-                marginBottom: '16px', 
-                padding: '12px', 
-                background: '#f5f5f5', 
-                borderRadius: '4px',
-                border: '1px solid #e8e8e8'
+                marginBottom: '16px',
+                padding: '12px',
+                background: '#ffffecff', 
+                borderRadius: '6px',
+                border: '4px groove #9a9a9aff'
               }}>
                 <div style={{ marginBottom: '8px' }}>
                   <Tag color="blue">分块 {chunk.chunk_index !== undefined ? chunk.chunk_index + 1 : index + 1}</Tag>

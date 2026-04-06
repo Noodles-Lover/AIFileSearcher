@@ -11,7 +11,7 @@ import {
   FileSpreadsheet 
 } from 'lucide-react';
 
-interface FileItem {
+export interface FileItem {
   key: string;
   name: string;
   path: string;

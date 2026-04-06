@@ -10,10 +10,10 @@ const { Title } = Typography;
 
 const SettingSection: React.FC<SettingSectionProps> = ({ title, children }) => {
   return (
-    <Card title={title} variant="borderless">
-      <Divider style={{ margin: '8px 0', borderTop: '2px solid #d9d9d9' }} />
+    <div style={{ padding: '16px'}}>
+      <Divider variant="dashed" style={{ borderColor: '#7cb305', margin: '8px 0', fontSize: '20px'}}>{title}</Divider>
       {children}
-    </Card>
+    </div>
   );
 };
 
