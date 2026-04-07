@@ -16,6 +16,38 @@
   background: #fff;
 }
 
+.home-results-table {
+  height: 100%;
+}
+
+.home-results-table .ant-spin-nested-loading,
+.home-results-table .ant-spin-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.home-results-table .ant-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.home-results-table .ant-table-container {
+  height: 100%;
+}
+
+.home-results-table .ant-table-body {
+  overflow-y: auto !important;
+}
+
+.home-results-table .ant-pagination {
+  margin-bottom: 0;
+  padding: 12px 16px;
+  border-top: 1px solid #f0f0f0;
+  background: #fff;
+}
+
 .ant-card {
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02);
 }
