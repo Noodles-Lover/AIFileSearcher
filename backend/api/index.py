@@ -10,6 +10,7 @@ from backend.RAG.FileCache import FileCache
 from backend.process.FileProcessor import FileProcessor
 from backend.utils.path_utils import get_project_root, get_data_path
 from backend.utils.IndexedFoldersManager import folders_manager
+from backend.utils.settings_manager import settings_manager
 
 router = APIRouter()
 
@@ -162,6 +163,8 @@ async def index_folder(request: dict):
             project_root = get_project_root()
             
             # 初始化系统
+            current_embedding_model = settings_manager.load().get("embedding_model", "bge-m3")
+            system.ensure_embedding_model(current_embedding_model)
             embedder = system.get_embedding_model()
             store = system.get_vector_store()
             processor = FileProcessor()
@@ -169,6 +172,7 @@ async def index_folder(request: dict):
             # 初始化文件缓存
             cache_path = get_data_path("file_cache.json")
             file_cache = FileCache(cache_path)
+            include_subfolders = bool(settings_manager.load().get("include_subfolders", False))
             
             # 发送初始化事件
             yield f"data: {json.dumps({'status': 'init', 'current': 0, 'total': 0, 'percent': 0, 'msg': '正在初始化系統...'})}\n\n"
@@ -181,6 +185,8 @@ async def index_folder(request: dict):
                     file_path = os.path.join(root, file)
                     if processor.is_supported_file(file_path):
                         files_to_process.append(file_path)
+                if not include_subfolders:
+                    break
             
             total_files = len(files_to_process)
             
@@ -225,10 +231,15 @@ async def index_folder(request: dict):
                             else:
                                 # 获取分块内容
                                 chunks = result.get("chunks", [])
+                                embedding_mode = result.get("embedding_mode", "text")
                                 
                                 if chunks and len(chunks) > 0:
                                     # 生成向量嵌入
-                                    embeddings = embedder.encode(chunks)
+                                    if embedding_mode == "image":
+                                        embedding_inputs = result.get("embedding_inputs", [])
+                                        embeddings = embedder.encode_images(embedding_inputs)
+                                    else:
+                                        embeddings = embedder.encode(chunks)
                                     
                                     # 准备元数据
                                     metas = []
@@ -236,7 +247,8 @@ async def index_folder(request: dict):
                                         metadata = {
                                             'file_path': file_path,
                                             'chunk_index': j,
-                                            'chunk_text': chunk
+                                            'chunk_text': chunk,
+                                            'content_type': embedding_mode
                                         }
                                         metas.append(metadata)
                                     

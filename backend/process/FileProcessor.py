@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Type, Optional
+from typing import Any, List, Dict, Type, Optional
 from .BaseParser import BaseParser
 from .TXTParser import TXTParser
 from .PDFParser import PDFParser
@@ -7,6 +7,7 @@ from .DocxParser import DocxParser
 from .DocParser import DocParser
 from .PPTParser import PPTParser
 from .MDParser import MDParser
+from .ImageParser import ImageParser
 from .ChunkingStrategy import ChunkingStrategy, FixedSizeChunking, ParagraphChunking, SentenceChunking
 
 class FileProcessor:
@@ -23,6 +24,12 @@ class FileProcessor:
         '.doc': DocParser,
         '.pptx': PPTParser,
         '.md': MDParser,
+        '.png': ImageParser,
+        '.jpg': ImageParser,
+        '.jpeg': ImageParser,
+        '.bmp': ImageParser,
+        '.gif': ImageParser,
+        '.webp': ImageParser,
     }
 
     def __init__(self, default_chunking_strategy: ChunkingStrategy = None):
@@ -92,7 +99,7 @@ class FileProcessor:
             # 執行模板方法
             chunks = parser.process()
             
-            return {
+            result: Dict[str, Any] = {
                 "file_path": file_path,
                 "type": ext,
                 "metadata": parser.metadata,
@@ -101,6 +108,14 @@ class FileProcessor:
                 "chunk_count": len(chunks),
                 "strategy": str(strategy)
             }
+
+            if hasattr(parser, "embedding_mode"):
+                result["embedding_mode"] = getattr(parser, "embedding_mode")
+
+            if hasattr(parser, "get_embedding_inputs"):
+                result["embedding_inputs"] = parser.get_embedding_inputs()
+
+            return result
         except Exception as e:
             return {"error": str(e)}
 

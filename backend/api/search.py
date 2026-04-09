@@ -11,19 +11,23 @@ ensure_project_path()
 from fastapi import APIRouter, HTTPException
 from .everything import EverythingClient
 from backend.RAG.SystemManager import system
+from backend.utils.settings_manager import settings_manager
 
 router = APIRouter()
 
 client = EverythingClient()
 
 @router.get("/api/list")
-def list_files(parent_path: str = ""):
+def list_files(parent_path: str = "", recursive: bool | None = None):
     """
     列出指定目錄下的文件（递归遍历子文件夹）
     """
     try:
         # 首先尝试使用 Everything (递归遍历)
-        results = client.get_files_in_folder(parent_path, recursive=True)
+        if recursive is None:
+            recursive = bool(settings_manager.load().get("include_subfolders", False))
+
+        results = client.get_files_in_folder(parent_path, recursive=recursive)
         
         if results == "CONNECTION_ERROR":
             # 如果 Everything 不可用，使用 Python 的 os.walk 作为备用（递归遍历）
@@ -48,6 +52,8 @@ def list_files(parent_path: str = ""):
                                 "type": "file"
                             }
                             results.append(file_info)
+                    if not recursive:
+                        break
             except PermissionError:
                 # 如果没有权限访问，返回空列表
                 results = []

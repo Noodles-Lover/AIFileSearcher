@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from typing import List, Union
+from typing import Any, List, Union
 from sentence_transformers import SentenceTransformer
 from backend.utils.path_utils import get_project_root, get_models_path
 
@@ -44,6 +44,28 @@ class EmbeddingModel:
             else:
                 # String list input, return vector list
                 return result.tolist()
+        return []
+
+    def encode_images(self, images: Union[Any, List[Any]]) -> List[List[float]]:
+        """
+        Convert image inputs to vectors.
+        This only works when the underlying model supports multimodal/image
+        inputs, such as CLIP-style sentence-transformers models.
+        """
+        image_list = images if isinstance(images, list) else [images]
+
+        try:
+            result = self.model.encode(image_list, convert_to_numpy=True)
+        except Exception as exc:
+            raise ValueError(
+                "Current embedding model does not support image encoding. "
+                "Please use a multimodal model before indexing images."
+            ) from exc
+
+        if isinstance(result, np.ndarray):
+            if result.ndim == 1:
+                return [result.tolist()]
+            return result.tolist()
         return []
 
 if __name__ == "__main__":

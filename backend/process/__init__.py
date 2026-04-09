@@ -5,10 +5,11 @@ from .PDFParser import PDFParser
 from .DocxParser import DocxParser
 from .PPTParser import PPTParser
 from .MDParser import MDParser
+from .ImageParser import ImageParser
 from .TXTParser import TXTParser
 from .FileProcessor import FileProcessor
 
-parsers: List[BaseParser] = [PDFParser, TXTParser, DocxParser, PPTParser, MDParser]
+parsers: List[BaseParser] = [PDFParser, TXTParser, DocxParser, PPTParser, MDParser, ImageParser]
 
 
 def _get_parser(suffix: str) -> BaseParser:

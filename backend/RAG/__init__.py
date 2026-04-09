@@ -9,8 +9,9 @@ RAG (Retrieval-Augmented Generation) 模块
 """
 
 from .EmbeddingModel import EmbeddingModel
+from .LocalLLM import LocalLLM
 from .VectorStore import VectorStore
 from .SystemManager import SystemManager, system
 from .FileCache import FileCache
 
-__all__ = ['EmbeddingModel', 'VectorStore', 'SystemManager', 'system', 'FileCache']
+__all__ = ['EmbeddingModel', 'LocalLLM', 'VectorStore', 'SystemManager', 'system', 'FileCache']

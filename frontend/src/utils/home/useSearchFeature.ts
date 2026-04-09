@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import dayjs from 'dayjs';
 import { message } from 'antd';
 import type { FileItem } from '../../components/FileIcon';
 import { API_ENDPOINTS, apiGet, apiPost } from '../api';
@@ -28,6 +29,34 @@ interface ListFileResult {
   extension?: string;
 }
 
+const HOME_STATE_STORAGE_KEY = 'ai-file-searcher-home-state';
+
+interface HomeStateCache {
+  searchQuery: string;
+  files: FileItem[];
+  currentPath: string | null;
+  filterExtensions: string;
+  filterMinSize: number | null;
+  filterMaxSize: number | null;
+  filterMinSizeUnit: string;
+  filterMaxSizeUnit: string;
+  filterDateRange: [string | null, string | null];
+}
+
+function loadCachedHomeState(): HomeStateCache | null {
+  try {
+    const rawState = window.sessionStorage.getItem(HOME_STATE_STORAGE_KEY);
+    if (!rawState) {
+      return null;
+    }
+
+    return JSON.parse(rawState) as HomeStateCache;
+  } catch (error) {
+    console.error('Failed to restore home state:', error);
+    return null;
+  }
+}
+
 function mapListResults(results: ListFileResult[], path: string): FileItem[] {
   return results.map((item, index) => ({
     key: `${item.path}-${index}`,
@@ -44,19 +73,57 @@ function mapListResults(results: ListFileResult[], path: string): FileItem[] {
 }
 
 export function useSearchFeature() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [files, setFiles] = useState<FileItem[]>([]);
+  const cachedState = loadCachedHomeState();
+
+  const [searchQuery, setSearchQuery] = useState(cachedState?.searchQuery || '');
+  const [files, setFiles] = useState<FileItem[]>(Array.isArray(cachedState?.files) ? cachedState!.files : []);
   const [loading, setLoading] = useState(false);
-  const [currentPath, setCurrentPath] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<string | null>(cachedState?.currentPath || null);
   const [showPathInput, setShowPathInput] = useState(false);
   const [inputPath, setInputPath] = useState('');
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filterExtensions, setFilterExtensions] = useState('');
-  const [filterMinSize, setFilterMinSize] = useState<number | null>(null);
-  const [filterMaxSize, setFilterMaxSize] = useState<number | null>(null);
-  const [filterMinSizeUnit, setFilterMinSizeUnit] = useState('B');
-  const [filterMaxSizeUnit, setFilterMaxSizeUnit] = useState('B');
-  const [filterDateRange, setFilterDateRange] = useState<[any, any]>([null, null]);
+  const [filterExtensions, setFilterExtensions] = useState(cachedState?.filterExtensions || '');
+  const [filterMinSize, setFilterMinSize] = useState<number | null>(cachedState?.filterMinSize ?? null);
+  const [filterMaxSize, setFilterMaxSize] = useState<number | null>(cachedState?.filterMaxSize ?? null);
+  const [filterMinSizeUnit, setFilterMinSizeUnit] = useState(cachedState?.filterMinSizeUnit || 'B');
+  const [filterMaxSizeUnit, setFilterMaxSizeUnit] = useState(cachedState?.filterMaxSizeUnit || 'B');
+  const [filterDateRange, setFilterDateRange] = useState<[any, any]>([
+    cachedState?.filterDateRange?.[0] ? dayjs(cachedState.filterDateRange[0]) : null,
+    cachedState?.filterDateRange?.[1] ? dayjs(cachedState.filterDateRange[1]) : null,
+  ]);
+
+  useEffect(() => {
+    try {
+      const cachedState: HomeStateCache = {
+        searchQuery,
+        files,
+        currentPath,
+        filterExtensions,
+        filterMinSize,
+        filterMaxSize,
+        filterMinSizeUnit,
+        filterMaxSizeUnit,
+        filterDateRange: [
+          filterDateRange[0]?.toISOString?.() || null,
+          filterDateRange[1]?.toISOString?.() || null,
+        ],
+      };
+
+      window.sessionStorage.setItem(HOME_STATE_STORAGE_KEY, JSON.stringify(cachedState));
+    } catch (error) {
+      console.error('Failed to cache home state:', error);
+    }
+  }, [
+    searchQuery,
+    files,
+    currentPath,
+    filterExtensions,
+    filterMinSize,
+    filterMaxSize,
+    filterMinSizeUnit,
+    filterMaxSizeUnit,
+    filterDateRange,
+  ]);
 
   const clearResults = () => {
     setFiles([]);
@@ -83,7 +150,9 @@ export function useSearchFeature() {
           return;
         }
 
-        const params = new URLSearchParams({ parent_path: path });
+        const params = new URLSearchParams({
+          parent_path: path,
+        });
         const response = await fetch(`${API_ENDPOINTS.LIST_FILES}?${params.toString()}`);
         const data = await response.json();
 
