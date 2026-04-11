@@ -72,9 +72,12 @@ const Settings: React.FC = () => {
   const [availableLLMModels, setAvailableLLMModels] = useState<string[]>([]);
   const [selectedLLMModel, setSelectedLLMModel] = useState('');
   const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
+  const [selectedIndexType, setSelectedIndexType] = useState('IndexFlatL2');
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
+
+  const AVAILABLE_INDEX_TYPES = ['IndexFlatL2', 'IndexFlatIP', 'IndexIVFFlat', 'IndexHNSWFlat'];
 
   const fetchFolders = async () => {
     setFoldersLoading(true);
@@ -96,6 +99,7 @@ const Settings: React.FC = () => {
       setSelectedEmbeddingModel(settings.embedding_model || 'bge-m3');
       setSelectedLLMModel(settings.llm_model || '');
       setQueryRewriteEnabled(settings.query_rewrite_enabled || false);
+      setSelectedIndexType(settings.index_type || 'IndexFlatL2');
 
       const [embeddingData, llmData] = await Promise.all([
         apiGet<ModelsResponse>(API_ENDPOINTS.EMBEDDING_MODELS),
@@ -184,6 +188,36 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleIndexTypeChange = async (indexType: string) => {
+    if (indexType === selectedIndexType) return;
+
+    Modal.confirm({
+      title: '确认更改索引类型？',
+      icon: <ExclamationCircleOutlined />,
+      content: `更改索引类型将清除所有现有索引数据，确定要继续吗？`,
+      okText: '确认更改',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        setSettingsSaving(true);
+        setLoading(true);
+        try {
+          await saveSettings({ index_type: indexType });
+          await apiPost<{ success: boolean; message?: string }>(API_ENDPOINTS.CLEAR_INDEX, {});
+          setSelectedIndexType(indexType);
+          fetchFolders();
+          message.success('索引类型已更改，所有索引数据已清除');
+        } catch (error) {
+          console.error('Failed to change index type:', error);
+          message.error('更改索引类型失败');
+        } finally {
+          setSettingsSaving(false);
+          setLoading(false);
+        }
+      },
+    });
+  };
+
   const handleRemoveFolder = (folderPath: string) => {
     Modal.confirm({
       title: '确认移除索引文件夹？',
@@ -266,6 +300,11 @@ const Settings: React.FC = () => {
     })),
   ];
 
+  const indexTypeOptions = AVAILABLE_INDEX_TYPES.map((type) => ({
+    label: type,
+    value: type,
+  }));
+
   return (
     <Layout style={styles.layout}>
       <Header style={styles.header}>
@@ -319,6 +358,24 @@ const Settings: React.FC = () => {
                   onChange={handleLLMModelChange}
                   style={styles.modelSelect}
                   placeholder="请选择LLM模型"
+                />
+              </div>
+
+              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                <div>
+                  <Text strong>索引类型</Text>
+                  <br />
+                  <Text type="secondary" style={styles.secondaryText}>
+                    切换索引类型会清除所有现有索引数据。IndexFlatL2：精确但慢；IndexIVFFlat：快速但需数据量大。
+                  </Text>
+                </div>
+                <Select
+                  value={selectedIndexType}
+                  options={indexTypeOptions}
+                  onChange={handleIndexTypeChange}
+                  style={styles.modelSelect}
+                  placeholder="请选择索引类型"
+                  disabled={settingsSaving}
                 />
               </div>
 

@@ -99,11 +99,13 @@ class SystemManager:
 
         index_path = get_data_path("faiss_index.bin")
         metadata_path = get_data_path("metadata.json")
+        index_type = settings_manager.load().get("index_type", "IndexFlatL2")
 
         self.vector_store = VectorStore(
             dimension=dimension,
             index_path=index_path,
             metadata_path=metadata_path,
+            index_type=index_type,
         )
 
         self.is_initialized = True

@@ -39,43 +39,43 @@ def clear_index():
     清空向量索引
     """
     try:
-        # 直接删除文件，不需要初始化系统
         index_path = get_data_path("faiss_index.bin")
         metadata_path = get_data_path("metadata.json")
         cache_path = get_data_path("file_cache.json")
-        
+        info_path = get_data_path("faiss_index.info")
+
         files_deleted = []
-        
+
         if os.path.exists(index_path):
             os.remove(index_path)
             files_deleted.append("faiss_index.bin")
-            
+
         if os.path.exists(metadata_path):
             os.remove(metadata_path)
             files_deleted.append("metadata.json")
-        
-        # 删除缓存文件
+
         if os.path.exists(cache_path):
             os.remove(cache_path)
             files_deleted.append("file_cache.json")
-        
-        # 清空已索引文件夹记录
+
+        if os.path.exists(info_path):
+            os.remove(info_path)
+            files_deleted.append("faiss_index.info")
+
         folders_manager.clear()
-        
-        # 清空系统管理器中的向量存储实例（如果已初始化）
+
         if system.is_initialized and system.vector_store:
             system.vector_store.index = None
             system.vector_store.metadata = []
-        
-        # 重置系统初始化状态，强制重新初始化
+
         system.is_initialized = False
         system.embedding_model = None
         system.vector_store = None
-        
+
         print(f"索引和缓存已清空，删除文件: {', '.join(files_deleted)}")
-        
+
         return {"success": True, "message": f"索引和缓存已清空，删除了 {len(files_deleted)} 个文件"}
-        
+
     except Exception as e:
         print(f"清空索引时出错: {e}")
         return {"error": f"清空索引失败: {str(e)}"}

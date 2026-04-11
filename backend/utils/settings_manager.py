@@ -10,6 +10,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "embedding_model": "bge-m3",
     "llm_model": "",
     "query_rewrite_enabled": False,
+    "index_type": "IndexFlatL2",
 }
 
 
