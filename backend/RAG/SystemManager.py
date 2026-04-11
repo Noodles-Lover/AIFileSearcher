@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from backend.utils.path_utils import get_models_path, get_data_path
+from backend.utils.path_utils import get_embedding_models_path, get_data_path
 from backend.utils.settings_manager import settings_manager
 
 from .EmbeddingModel import EmbeddingModel
@@ -52,8 +52,8 @@ class SystemManager:
 
         print(f"Initializing system core components... Model: {model_name}")
 
-        models_dir = get_models_path()
-        model_path = get_models_path(model_name)
+        models_dir = get_embedding_models_path()
+        model_path = get_embedding_models_path(model_name)
 
         if os.path.exists(model_path):
             if not self.embedding_model:

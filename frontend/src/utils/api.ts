@@ -15,6 +15,8 @@ export const API_ENDPOINTS = {
   OPEN_FILE: `${API_BASE_URL}/api/open-file`,
   OPEN_FOLDER: `${API_BASE_URL}/api/open-folder`,
   GET_ICON: `${API_BASE_URL}/api/icon`,
+  EMBEDDING_MODELS: `${API_BASE_URL}/api/llm/embedding_models`,
+  LLM_MODELS: `${API_BASE_URL}/api/llm/llm_models`,
 } as const;
 
 export const DEFAULT_HEADERS = {

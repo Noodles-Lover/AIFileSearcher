@@ -122,7 +122,29 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
         # 解析過濾條件
         extensions = set(ext.lower() for ext in file_extensions.split(',')) if file_extensions else None
 
-        # 1. 生成查詢向量
+        # 1. LLM查詢重寫
+        original_query = q
+        use_query_rewrite = settings_manager.load().get("query_rewrite_enabled", False)
+        
+        if use_query_rewrite:
+            try:
+                rewritten_query = rewrite_query_with_llm(q)
+                if rewritten_query and rewritten_query.strip():
+                    q = rewritten_query.strip()
+                    print(f"\n{'='*50}")
+                    print(f"🔄 LLM查詢重寫")
+                    print(f"{'='*50}")
+                    print(f"📝 原始查詢: {original_query}")
+                    print(f"✨ 重寫後查詢: {q}")
+                    print(f"{'='*50}\n")
+                else:
+                    print(f"\n⚠️ LLM返回了空結果，使用原始查詢: {original_query}")
+                    q = original_query
+            except Exception as llm_error:
+                print(f"\n❌ LLM查詢重寫失敗: {llm_error}，使用原始查詢: {original_query}")
+                q = original_query
+
+        # 2. 生成查詢向量
         start_time = time.time()
         query_vector = embedder.encode(q)[0]
         
@@ -421,3 +443,44 @@ def calculate_dynamic_chunk_count(k: int, total_chunks: int) -> int:
     extract_count = max(50, min(total_chunks, extract_count))
     
     return extract_count
+
+
+QUERY_REWRITE_TEMPLATE = """這是一個語義文件搜索系統，你需要將用戶的查詢轉換為更合適向量檢索的查詢，將用戶的查詢進行擴展，使得准確率提升，如：蘋果 改寫成 關於蘋果這種水果的介紹、營養價值和特點
+請直接回答轉換後的結果，不要回復任何多餘文本
+
+這是用戶的查詢：{query}"""
+
+
+def rewrite_query_with_llm(query: str) -> str:
+    """
+    使用LLM重寫查詢
+
+    Args:
+        query: 用戶原始查詢
+
+    Returns:
+        LLM重寫後的查詢
+    """
+    current_settings = settings_manager.load()
+    llm_model = current_settings.get("llm_model", "")
+
+    if not llm_model:
+        raise ValueError("未配置LLM模型，請先在設置中選擇LLM模型")
+
+    try:
+        llm = system.load_local_llm(model_name=llm_model)
+
+        prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+
+        rewritten = llm.generate(
+            prompt=prompt,
+            system_prompt="",
+            max_new_tokens=256,
+            temperature=0.7,
+            top_p=0.9,
+        )
+
+        return rewritten.strip()
+
+    except Exception as e:
+        raise RuntimeError(f"LLM調用失敗: {str(e)}")

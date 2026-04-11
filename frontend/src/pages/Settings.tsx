@@ -22,7 +22,7 @@ import {
 
 import SettingSection from '../components/SettingSection';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
-import { listAvailableModels, loadSettings, saveSettings } from '../utils/settingsManager';
+import { listEmbeddingModels, listLLMModels, loadSettings, saveSettings } from '../utils/settingsManager';
 
 interface ApiResponse {
   success?: boolean;
@@ -33,6 +33,11 @@ interface ApiResponse {
 interface IndexedFoldersResponse {
   folders?: string[];
   error?: string;
+}
+
+interface ModelsResponse {
+  models: string[];
+  current_model: string;
 }
 
 const { Header, Content } = Layout;
@@ -62,8 +67,11 @@ const Settings: React.FC = () => {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [includeSubfolders, setIncludeSubfolders] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState('bge-m3');
+  const [availableEmbeddingModels, setAvailableEmbeddingModels] = useState<string[]>([]);
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('bge-m3');
+  const [availableLLMModels, setAvailableLLMModels] = useState<string[]>([]);
+  const [selectedLLMModel, setSelectedLLMModel] = useState('');
+  const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
@@ -83,10 +91,18 @@ const Settings: React.FC = () => {
   const fetchSettings = async () => {
     setSettingsLoading(true);
     try {
-      const [settings, models] = await Promise.all([loadSettings(true), listAvailableModels()]);
+      const settings = await loadSettings(true);
       setIncludeSubfolders(settings.include_subfolders);
-      setSelectedModel(settings.embedding_model);
-      setAvailableModels(models);
+      setSelectedEmbeddingModel(settings.embedding_model || 'bge-m3');
+      setSelectedLLMModel(settings.llm_model || '');
+      setQueryRewriteEnabled(settings.query_rewrite_enabled || false);
+
+      const [embeddingData, llmData] = await Promise.all([
+        apiGet<ModelsResponse>(API_ENDPOINTS.EMBEDDING_MODELS),
+        apiGet<ModelsResponse>(API_ENDPOINTS.LLM_MODELS),
+      ]);
+      setAvailableEmbeddingModels(embeddingData.models || []);
+      setAvailableLLMModels(llmData.models || []);
     } catch (error) {
       console.error('Failed to load settings:', error);
       message.error('加载设置失败');
@@ -117,18 +133,52 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleModelChange = async (modelName: string) => {
-    setSelectedModel(modelName);
+  const handleEmbeddingModelChange = async (modelName: string) => {
+    setSelectedEmbeddingModel(modelName);
     setSettingsSaving(true);
     try {
       const settings = await saveSettings({ embedding_model: modelName });
-      setSelectedModel(settings.embedding_model);
-      message.success('模型设置已保存，重启并重建索引后生效');
+      setSelectedEmbeddingModel(settings.embedding_model);
+      message.success('嵌入模型设置已保存，重启并重建索引后生效');
     } catch (error) {
-      console.error('Failed to save model setting:', error);
-      message.error('保存模型设置失败');
+      console.error('Failed to save embedding model setting:', error);
+      message.error('保存嵌入模型设置失败');
       const settings = await loadSettings(true);
-      setSelectedModel(settings.embedding_model);
+      setSelectedEmbeddingModel(settings.embedding_model);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleLLMModelChange = async (modelName: string) => {
+    setSelectedLLMModel(modelName);
+    setSettingsSaving(true);
+    try {
+      const settings = await saveSettings({ llm_model: modelName });
+      setSelectedLLMModel(settings.llm_model);
+      message.success('LLM模型设置已保存');
+    } catch (error) {
+      console.error('Failed to save LLM model setting:', error);
+      message.error('保存LLM模型设置失败');
+      const settings = await loadSettings(true);
+      setSelectedLLMModel(settings.llm_model);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleQueryRewriteChange = async (checked: boolean) => {
+    setQueryRewriteEnabled(checked);
+    setSettingsSaving(true);
+    try {
+      const settings = await saveSettings({ query_rewrite_enabled: checked });
+      setQueryRewriteEnabled(settings.query_rewrite_enabled);
+      message.success('查询重写设置已保存');
+    } catch (error) {
+      console.error('Failed to save query rewrite setting:', error);
+      message.error('保存查询重写设置失败');
+      const settings = await loadSettings(true);
+      setQueryRewriteEnabled(settings.query_rewrite_enabled);
     } finally {
       setSettingsSaving(false);
     }
@@ -203,10 +253,18 @@ const Settings: React.FC = () => {
     }
   };
 
-  const modelOptions = Array.from(new Set([selectedModel, ...availableModels])).map((model) => ({
+  const embeddingModelOptions = Array.from(new Set([selectedEmbeddingModel, ...availableEmbeddingModels])).map((model) => ({
     label: model,
     value: model,
   }));
+
+  const llmModelOptions = [
+    { label: '未选择', value: '' },
+    ...Array.from(new Set([selectedLLMModel, ...availableLLMModels])).map((model) => ({
+      label: model,
+      value: model,
+    })),
+  ];
 
   return (
     <Layout style={styles.layout}>
@@ -235,16 +293,44 @@ const Settings: React.FC = () => {
                   <Text strong>嵌入模型</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
-                    自动读取 `models` 文件夹。切换模型后建议重建索引，避免出现兼容性问题。
+                    自动读取 `models/embedding` 文件夹。切换模型后建议重建索引，避免出现兼容性问题。
                   </Text>
                 </div>
                 <Select
-                  value={selectedModel}
-                  options={modelOptions}
-                  onChange={handleModelChange}
+                  value={selectedEmbeddingModel}
+                  options={embeddingModelOptions}
+                  onChange={handleEmbeddingModelChange}
                   style={styles.modelSelect}
-                  placeholder="请选择模型"
+                  placeholder="请选择嵌入模型"
                 />
+              </div>
+
+              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                <div>
+                  <Text strong>LLM模型</Text>
+                  <br />
+                  <Text type="secondary" style={styles.secondaryText}>
+                    自动读取 `models/LLM` 文件夹。用于查询重写功能。
+                  </Text>
+                </div>
+                <Select
+                  value={selectedLLMModel}
+                  options={llmModelOptions}
+                  onChange={handleLLMModelChange}
+                  style={styles.modelSelect}
+                  placeholder="请选择LLM模型"
+                />
+              </div>
+
+              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                <div>
+                  <Text strong>启用查询重写</Text>
+                  <br />
+                  <Text type="secondary" style={styles.secondaryText}>
+                    使用LLM优化搜索关键词，提升语义搜索准确率。需要先选择LLM模型。
+                  </Text>
+                </div>
+                <Switch checked={queryRewriteEnabled} onChange={handleQueryRewriteChange} disabled={!selectedLLMModel} />
               </div>
             </Spin>
           </SettingSection>

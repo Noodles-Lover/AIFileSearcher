@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from backend.utils.path_utils import get_models_path
+from backend.utils.path_utils import get_llm_models_path
 
 
 class LocalLLM:
@@ -47,7 +47,7 @@ class LocalLLM:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
     def _resolve_model_path(self, model_name: str) -> str:
-        local_path = get_models_path(model_name)
+        local_path = get_llm_models_path(model_name)
         if os.path.exists(local_path):
             return local_path
         return model_name

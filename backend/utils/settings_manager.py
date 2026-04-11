@@ -9,6 +9,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "include_subfolders": False,
     "embedding_model": "bge-m3",
     "llm_model": "",
+    "query_rewrite_enabled": False,
 }
 
 

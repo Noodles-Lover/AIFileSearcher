@@ -46,3 +46,23 @@ def get_models_path(model_name: str = "") -> str:
     if model_name:
         return os.path.join(project_root, "models", model_name)
     return os.path.join(project_root, "models")
+
+
+def get_embedding_models_path(model_name: str = "") -> str:
+    """
+    获取 models/embedding 目录下模型的完整路径
+    """
+    project_root = get_project_root()
+    if model_name:
+        return os.path.join(project_root, "models", "embedding", model_name)
+    return os.path.join(project_root, "models", "embedding")
+
+
+def get_llm_models_path(model_name: str = "") -> str:
+    """
+    获取 models/LLM 目录下模型的完整路径
+    """
+    project_root = get_project_root()
+    if model_name:
+        return os.path.join(project_root, "models", "LLM", model_name)
+    return os.path.join(project_root, "models", "LLM")

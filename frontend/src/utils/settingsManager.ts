@@ -1,15 +1,18 @@
 export interface AppSettings {
   include_subfolders: boolean;
   embedding_model: string;
+  llm_model: string;
+  query_rewrite_enabled: boolean;
 }
 
 const SETTINGS_STORAGE_KEY = 'ai-file-searcher-settings';
 const SETTINGS_FILE_PATH = 'local_data/settings.json';
-const MODELS_DIR_PATH = 'models';
 
 const DEFAULT_SETTINGS: AppSettings = {
   include_subfolders: false,
   embedding_model: 'bge-m3',
+  llm_model: '',
+  query_rewrite_enabled: false,
 };
 
 type FileBridge = {
@@ -160,6 +163,10 @@ export async function saveSettings(nextSettings: Partial<AppSettings>): Promise<
 }
 
 export async function listAvailableModels(): Promise<string[]> {
+  return [DEFAULT_SETTINGS.embedding_model];
+}
+
+export async function listEmbeddingModels(): Promise<string[]> {
   const bridge = await getFileBridge();
 
   if (!bridge) {
@@ -167,7 +174,7 @@ export async function listAvailableModels(): Promise<string[]> {
   }
 
   return new Promise<string[]>((resolve) => {
-    bridge.listDirectories(MODELS_DIR_PATH, (directoryJson) => {
+    bridge.listDirectories('models/embedding', (directoryJson) => {
       try {
         const directories = JSON.parse(directoryJson);
         if (!Array.isArray(directories) || directories.length === 0) {
@@ -178,6 +185,30 @@ export async function listAvailableModels(): Promise<string[]> {
         resolve(directories);
       } catch {
         resolve([DEFAULT_SETTINGS.embedding_model]);
+      }
+    });
+  });
+}
+
+export async function listLLMModels(): Promise<string[]> {
+  const bridge = await getFileBridge();
+
+  if (!bridge) {
+    return [];
+  }
+
+  return new Promise<string[]>((resolve) => {
+    bridge.listDirectories('models/LLM', (directoryJson) => {
+      try {
+        const directories = JSON.parse(directoryJson);
+        if (!Array.isArray(directories) || directories.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        resolve(directories);
+      } catch {
+        resolve([]);
       }
     });
   });

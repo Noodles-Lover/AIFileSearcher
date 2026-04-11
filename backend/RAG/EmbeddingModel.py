@@ -2,7 +2,7 @@ import os
 import numpy as np
 from typing import Any, List, Union
 from sentence_transformers import SentenceTransformer
-from backend.utils.path_utils import get_project_root, get_models_path
+from backend.utils.path_utils import get_embedding_models_path
 
 class EmbeddingModel:
     """
@@ -15,7 +15,7 @@ class EmbeddingModel:
         :param device: Running device (cpu/cuda)
         """
         # Build local model path
-        local_model_path = get_models_path(model_name)
+        local_model_path = get_embedding_models_path(model_name)
         
         print(f"Checking local model path: {local_model_path}")
         

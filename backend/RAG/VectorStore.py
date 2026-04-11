@@ -117,31 +117,33 @@ class VectorStore:
     def search(self, query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
         if self.index.ntotal == 0:
             return []
-            
+
+        query_dim = len(query_vector)
+        if query_dim != self.index.d:
+            print(f"向量维度不匹配: 查询向量维度: {query_dim}, 索引维度: {self.index.d}")
+            raise ValueError("向量维度不匹配。可能是使用了不同的嵌入模型创建索引。请重建索引后重试。")
         try:
-            # 轉換查詢向量
             query_np = np.array([query_vector]).astype('float32')
-            
-            # 執行搜索
-            # D: 距離 (L2距離，越小越相似)
-            # I: 索引 ID
+
             D, I = self.index.search(query_np, k)
-            
+
             results = []
             for i, idx in enumerate(I[0]):
                 if idx != -1 and idx < len(self.metadata):
                     item = self.metadata[idx].copy()
-                    item['score'] = float(D[0][i]) # L2 距離
+                    item['score'] = float(D[0][i])
                     results.append(item)
-                    
+
             return results
         except Exception as e:
-            print(f"搜索過程中出現錯誤: {e}")
-            # 嘗試重建索引
-            self.index = faiss.IndexFlatL2(self.dimension)
-            self.metadata = []
-            self.save()
-            return []
+
+            if error_type in ("RuntimeError", "AssertionError") or "dimension" in error_msg.lower() or "size" in error_msg.lower():
+                raise ValueError(
+                    f"向量维度不匹配: 查询向量维度 {query_dim} 与索引维度 {self.index.d if self.index else 'N/A'} 不匹配。"
+                    f"可能是使用了不同的嵌入模型创建索引。请重建索引后重试。"
+                ) from e
+
+            raise RuntimeError(f"搜索失败: {error_type} - {error_msg}") from e
 
     def save(self, current_file: str = None, current_vectors: int = None):
         """保存索引和元數據到磁盤"""
