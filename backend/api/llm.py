@@ -1,90 +1,15 @@
-import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
 from backend.RAG.SystemManager import system
-from backend.utils.path_utils import get_embedding_models_path, get_llm_models_path
 from backend.utils.settings_manager import settings_manager
+from backend.utils.model_utils import list_local_embedding_models, list_local_llm_models
 
 router = APIRouter()
 
 
-def list_local_embedding_models() -> List[str]:
-    models_root = get_embedding_models_path()
-    if not os.path.exists(models_root):
-        return []
-
-    candidates: List[str] = []
-    for item in os.listdir(models_root):
-        model_dir = os.path.join(models_root, item)
-        if not os.path.isdir(model_dir):
-            continue
-
-        config_path = os.path.join(model_dir, "config.json")
-        config_st_path = os.path.join(model_dir, "config_sentence_transformers.json")
-        if not os.path.exists(config_path) and not os.path.exists(config_st_path):
-            continue
-
-        has_weights = False
-        for root, _, files in os.walk(model_dir):
-            for filename in files:
-                lower_name = filename.lower()
-                if (
-                    lower_name.endswith(".safetensors")
-                    or lower_name == "pytorch_model.bin"
-                    or lower_name == "model.safetensors.index.json"
-                    or lower_name == "pytorch_model.bin.index.json"
-                    or lower_name.endswith(".onnx")
-                ):
-                    has_weights = True
-                    break
-            if has_weights:
-                break
-
-        if has_weights:
-            candidates.append(item)
-
-    return sorted(candidates, key=str.lower)
-
-
-def list_local_llm_models() -> List[str]:
-    models_root = get_llm_models_path()
-    if not os.path.exists(models_root):
-        return []
-
-    candidates: List[str] = []
-    for item in os.listdir(models_root):
-        model_dir = os.path.join(models_root, item)
-        if not os.path.isdir(model_dir):
-            continue
-
-        config_path = os.path.join(model_dir, "config.json")
-        if not os.path.exists(config_path):
-            continue
-
-        has_weights = False
-        for root, _, files in os.walk(model_dir):
-            for filename in files:
-                lower_name = filename.lower()
-                if (
-                    lower_name.endswith(".safetensors")
-                    or lower_name == "pytorch_model.bin"
-                    or lower_name == "model.safetensors.index.json"
-                    or lower_name == "pytorch_model.bin.index.json"
-                ):
-                    has_weights = True
-                    break
-            if has_weights:
-                break
-
-        if has_weights:
-            candidates.append(item)
-
-    return sorted(candidates, key=str.lower)
-
-
-@router.get("/api/llm/embedding_models")
+@router.get("/api/embedding/list")
 def get_embedding_models():
     return {
         "models": list_local_embedding_models(),
@@ -92,7 +17,7 @@ def get_embedding_models():
     }
 
 
-@router.get("/api/llm/llm_models")
+@router.get("/api/llm/list")
 def get_llm_models():
     return {
         "models": list_local_llm_models(),
@@ -130,29 +55,23 @@ def unload_llm():
 def generate_text(request: Dict[str, Any]):
     prompt = (request.get("prompt") or "").strip()
     system_prompt = (request.get("system_prompt") or "").strip()
+    max_new_tokens = request.get("max_new_tokens", 512)
+    temperature = request.get("temperature", 0.7)
+    top_p = request.get("top_p", 0.9)
     model_name = (request.get("model_name") or "").strip() or None
-    device = (request.get("device") or "").strip() or None
-    max_new_tokens = int(request.get("max_new_tokens", 512))
-    temperature = float(request.get("temperature", 0.7))
-    top_p = float(request.get("top_p", 0.9))
 
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
     try:
-        output = system.generate_with_llm(
+        result = system.generate_with_llm(
             prompt=prompt,
             system_prompt=system_prompt,
-            model_name=model_name,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            device=device,
+            model_name=model_name,
         )
-        return {
-            "success": True,
-            "output": output,
-            "model_name": system.current_llm_name,
-        }
+        return {"result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
