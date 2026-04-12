@@ -2,29 +2,16 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, List
+from .TextChunkProcessor import TextChunkProcessor
 
-from .BaseParser import BaseParser
 
-
-class ImageParser(BaseParser):
+class ImageParser(TextChunkProcessor):
     """
-    Parser for image files.
-
-    It produces a single summary chunk for display/preview and exposes the
-    original image as embedding input for the indexing pipeline.
+    图片文件解析器
     """
-
     type = "image"
     SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
     embedding_mode = "image"
-
-    def process(self) -> List[str]:
-        if not self._check_format():
-            raise ValueError(f"Invalid file format for {self.file_path}")
-
-        self.parsed_content = self._clean_content(self._extract_content())
-        self.chunks = [self.parsed_content] if self.parsed_content else []
-        return self.chunks
 
     def _extract_content(self) -> str:
         metadata = self.metadata
@@ -40,7 +27,8 @@ class ImageParser(BaseParser):
 
         return ", ".join(parts)
 
-    def _extract_metadata(self) -> defaultdict:
+    @property
+    def metadata(self) -> defaultdict:
         metadata = defaultdict(str)
 
         try:
@@ -61,12 +49,3 @@ class ImageParser(BaseParser):
 
         with Image.open(self.file_path) as image:
             return [image.convert("RGB").copy()]
-
-    def _check_format(self) -> bool:
-        try:
-            from PIL import Image  # noqa: F401
-        except ImportError:
-            return False
-
-        file_path = Path(self.file_path)
-        return file_path.exists() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS

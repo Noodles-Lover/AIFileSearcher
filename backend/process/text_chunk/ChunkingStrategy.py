@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict
+
 
 class ChunkingStrategy(ABC):
     """
-    分塊策略接口 (Strategy Pattern)
-    定義將文本分割成塊的算法
+    分块策略接口 (Strategy Pattern)
+    定义将文本分割成块的算法
     """
+    DEFAULT_STRATEGIES: Dict[str, 'ChunkingStrategy'] = {}
+
     @abstractmethod
     def chunk(self, text: str) -> List[str]:
         pass
@@ -13,9 +16,10 @@ class ChunkingStrategy(ABC):
     def __str__(self):
         return self.__class__.__name__
 
+
 class FixedSizeChunking(ChunkingStrategy):
     """
-    固定字符數分塊策略
+    固定字符数分块策略
     """
     def __init__(self, chunk_size: int = 500, overlap: int = 50):
         self.chunk_size = chunk_size
@@ -36,19 +40,19 @@ class FixedSizeChunking(ChunkingStrategy):
     def __str__(self):
         return f"FixedSizeChunking(size={self.chunk_size}, overlap={self.overlap})"
 
+
 class SentenceChunking(ChunkingStrategy):
     """
-    基於句子的分塊策略 (簡單示例，實際可依賴 nltk/spacy)
+    基于句子的分块策略 (简单示例，实际可依赖 nltk/spacy)
     """
     def __init__(self, max_tokens: int = 200):
         self.max_tokens = max_tokens
 
     def chunk(self, text: str) -> List[str]:
-        # 簡單按句號分割，實際項目應更健壯
         sentences = text.replace('。', '.').split('.')
         chunks = []
         current_chunk = ""
-        
+
         for sent in sentences:
             sent = sent.strip()
             if not sent:
@@ -58,21 +62,32 @@ class SentenceChunking(ChunkingStrategy):
                 current_chunk = sent
             else:
                 current_chunk += ". " + sent if current_chunk else sent
-        
+
         if current_chunk:
             chunks.append(current_chunk)
-            
+
         return chunks
 
     def __str__(self):
         return f"SentenceChunking(max_tokens={self.max_tokens})"
 
+
 class ParagraphChunking(ChunkingStrategy):
     """
-    基於段落的分塊策略
+    基于段落的分块策略
     """
     def chunk(self, text: str) -> List[str]:
         return [p.strip() for p in text.split('\n\n') if p.strip()]
 
     def __str__(self):
         return "ParagraphChunking"
+
+
+ChunkingStrategy.DEFAULT_STRATEGIES = {
+    '.md': ParagraphChunking(),
+    '.txt': FixedSizeChunking(chunk_size=1000, overlap=100),
+    '.pdf': FixedSizeChunking(chunk_size=500, overlap=50),
+    '.docx': FixedSizeChunking(chunk_size=500, overlap=50),
+    '.doc': FixedSizeChunking(chunk_size=500, overlap=50),
+    '.pptx': FixedSizeChunking(chunk_size=500, overlap=50),
+}
