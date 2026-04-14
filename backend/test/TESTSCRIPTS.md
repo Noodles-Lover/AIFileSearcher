@@ -61,6 +61,12 @@
   - 验证SSE连接和数据流
   - 运行：`python test_sse.py`
 
+## 📝 LLM 模型测试
+- **`test_llm.py`** - LLM 模型测试
+  - 直接调用 LocalLLM 测试提示词效果
+  - 支持循环输入直到输入 0 退出
+  - 运行：`python test_llm.py`
+
 ## 📝 使用说明
 
 ### 运行单个测试

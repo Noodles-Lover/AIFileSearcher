@@ -36,140 +36,113 @@
 
 ### `api/` (API 接口層)
 負責定義 HTTP 接口，處理前端請求。
-*   **`server.py`**: 應用的入口文件。負責初始化 FastAPI 應用 (`app`)，配置 CORS，並掛載其他路由模塊 (`include_router`)。
-*   **`files.py`**: 文件操作相關接口。包括文件預覽 (`/api/preview`)、打開文件/文件夾 (`/api/open-*`)、獲取圖標 (`/api/icon`) 等。
-*   **`search.py`**: 搜索功能相關接口。包括調用 Everything 進行搜索 (`/api/search`)、列出文件 (`/api/list`) 和向量搜索 (`/api/vector_search`)。
-*   **`index.py`**: 索引功能相關接口。包括建立文件夾索引 (`/api/index_folder`)，使用 SSE (Server-Sent Events) 提供實時進度反饋。
-*   **`everything.py`**: Everything 客戶端封裝，提供與 Everything HTTP 服務器的通信接口。
+*   **`server.py`**: 應用的入口文件。啟動時自動加載模型，配置 CORS，並掛載其他路由模組。
+*   **`files.py`**: 文件操作相關接口，包括預覽、打開文件/文件夾、獲取圖標等。
+*   **`search.py`**: 搜索功能相關接口，包括 Everything 搜索、列表文件和向量搜索。
+*   **`index.py`**: 索引功能相關接口，建立文件夾索引，使用 SSE 提供實時進度反饋。
+*   **`llm.py`**: LLM 模型管理接口，包括模型列表、加載、卸載和文本生成。
 
 ### `gui/` (桌面 GUI 層)
 負責創建桌面窗口，嵌入 Web 界面。
 *   **`main.py`**: 桌面應用的入口。啟動後端 FastAPI 線程，創建 PyQt6 `QWebEngineView` 窗口並加載前端頁面。
 
-### `core/` (核心組件層)
-負責系統核心組件的管理和初始化。
-*   **`SystemManager.py`**: 系統管理器，使用單例模式管理嵌入模型和向量存儲的實例。提供統一的初始化和訪問接口。
+### `RAG/` (RAG 系統層)
+負責 RAG 系統的核心組件管理和對外接口。
+*   **`SystemManager.py`**: 系統管理器，單例模式，統一管理嵌入模型、LLM 和向量存儲。提供模型加載、切換和生成接口。
+*   **`EmbeddingModel.py`**: 嵌入模型封裝，支持加載本地或 HuggingFace 模型。
+*   **`LocalLLM.py`**: 本地 LLM 封裝，支持文本生成。
+*   **`VectorStore.py`**: FAISS 向量存儲封裝，負責向量存儲和檢索。
+*   **`FileCache.py`**: 文件緩存管理器，跟踪文件修改時間，避免重複處理。
 
 ### `process/` (內容處理層)
 負責文件的讀取、解析、清洗和分塊。
-*   **`FileProcessor.py`**: 核心處理類。根據文件擴展名調度對應的 Parser 和分塊策略。
-*   **`BaseParser.py`**: 所有解析器的抽象基類，定義了模板方法。
-*   **`ChunkingStrategy.py`**: 定義分塊策略（如固定大小、按段落、按句子）。
-*   **具體解析器**: `TXTParser.py`, `PDFParser.py`, `DocxParser.py`, `PPTParser.py`, `MDParser.py` 等。
-
-### `embedding/` (向量嵌入層)
-負責將文本轉換為向量並進行向量搜索。
-*   **`EmbeddingModel.py`**: 通用嵌入模型加載器。支持從項目根目錄的 `models/` 文件夾加載本地模型（如 BGE-M3），也支持從 HuggingFace 在線加載。使用 SentenceTransformers 框架。
-*   **`VectorStore.py`**: FAISS 向量存儲封裝。負責向量的存儲、檢索和管理。使用 L2 距離進行相似度計算，支持索引的保存和加載。
+*   **`FileProcessor.py`**: 核心處理類。根據文件擴展名和處理模式調度對應的處理器。
+*   **`BaseFileProcessor.py`**: 文件處理器基類，定義統一接口。
+*   **`text_chunk/`**: 文本分塊處理器和解析器目錄。
+    *   **`TextChunkProcessor.py`**: 文本分塊處理器
+    *   **`ChunkingStrategy.py`**: 分塊策略（固定大小、段落、句子）
+    *   **`TXTParser.py`**, **`MDParser.py`**, **`PDFParser.py`** 等：具體文件解析器
+*   **`semi_structured/`**: 半結構化描述處理器目錄
+*   **`binary/`**: 二進制文件描述處理器目錄
 
 ### `utils/` (工具層)
 通用工具函數。
-*   **`icons.py`**: 系統圖標提取工具，利用 PyQt6 獲取文件的原生圖標並轉換為 Base64。
+*   **`path_utils.py`**: 路徑工具，獲取項目根目錄、模型路徑等
+*   **`settings_manager.py`**: 設置管理器，保存和加載用戶設置
+*   **`model_utils.py`**: 模型工具，列舉可用模型
+*   **`icons.py`**: 系統圖標提取工具
 
-## 3. 嵌入模型 (Embedding Models)
+## 3. 系統啟動流程
 
-本項目支持加載本地嵌入模型 (如 BGE, Qwen3-Embedding)。
+1.  啟動 `gui/main.py` 或 `api/server.py`
+2.  FastAPI 服務啟動，觸發 `on_startup` 事件
+3.  `SystemManager.get_instance()` 獲取單例
+4.  自動調用 `_auto_load()` 加載嵌入模型和 LLM 模型
+5.  前端頁面加載完成
 
-*   **模型存放位置**: 請將模型文件夾放置在項目根目錄的 `models/` 文件夾下。
-*   **文件結構示例**:
-    ```
-    AIFileSearcher/
-    ├── models/
-    │   ├── bge-small-zh-v1.5/
-    │   │   ├── config.json
-    │   │   ├── model.safetensors
-    │   │   └── ...
-    │   └── ...
-    ```
+## 4. 嵌入模型 (Embedding Models)
+
+本項目支持加載本地嵌入模型 (如 BGE-M3)。
+
+*   **模型存放位置**: 項目根目錄的 `models/embedding/` 文件夾
 *   **代碼調用**:
     ```python
-    from embedding.EmbeddingModel import EmbeddingModel
-    
-    # 自動加載 models/bge-small-zh-v1.5
-    embedder = EmbeddingModel("bge-small-zh-v1.5")
+    from backend.RAG.SystemManager import SystemManager
+
+    sm = SystemManager.get_instance()
+    sm.reload_embedding_model("bge-m3")  # 切換模型
+    embedder = sm.get_embedding_model()
     vectors = embedder.encode(["你好", "世界"])
     ```
 
-## 4. 模型下載 (Model Download)
+## 5. LLM 模型 (LLM Models)
 
-為了方便開發者，我們提供了一個自動下載模型的腳本 `backend/download_model.py`。該腳本會從 HuggingFace 下載完整的模型文件並自動保存到 `models/` 目錄。
+本項目支持加載本地 LLM 模型 (如 Qwen, Phi)。
 
-### 使用方法
+*   **模型存放位置**: 項目根目錄的 `models/LLM/` 文件夾
+*   **代碼調用**:
+    ```python
+    from backend.RAG.SystemManager import SystemManager
 
-1.  **確保依賴已安裝**:
-    ```powershell
-    backend\venv\Scripts\pip install huggingface-hub
+    sm = SystemManager.get_instance()
+    sm.reload_llm("Qwen2.5-3B-Instruct")  # 切換模型
+    response = sm.generate_with_llm(prompt)
     ```
 
-2.  **運行下載腳本**:
-    ```powershell
-    backend\venv\Scripts\python backend/download_model.py
-    ```
+## 6. 向量搜索與索引 (Vector Search & Indexing)
 
-3.  **選擇模型**:
-    腳本運行後，會提示選擇要下載的模型（默認推薦 `BAAI/bge-small-zh-v1.5`），或者你可以輸入自定義的 HuggingFace 模型 ID。
+本項目使用 FAISS 進行向量存儲和檢索。
 
-    ```text
-    請選擇要下載的模型:
-    1. BAAI/bge-small-zh-v1.5
-    2. BAAI/bge-large-zh-v1.5
-    3. BAAI/bge-m3
-    4. Alibaba-NLP/gte-Qwen2-1.5B-instruct
-    0. 自定義輸入模型 ID
-    ```
+### 6.1 向量存儲
 
-4.  **下載完成**:
-    模型下載完成後，會自動保存在項目根目錄的 `models/` 文件夾下，之後即可在代碼中直接使用。
-
-## 5. 向量搜索與索引 (Vector Search & Indexing)
-
-本項目使用 FAISS 進行向量存儲和檢索，支持高效的語義搜索。
-
-### 5.1 向量存儲 (Vector Storage)
-
-*   **存儲位置**: 項目根目錄的 `local_data/` 文件夾下
+*   **存儲位置**: `data/` 文件夾
     *   `faiss_index.bin`: FAISS 索引文件
-    *   `metadata.json`: 元數據文件（包含文件路徑、內容片段等）
-*   **維度自動檢測**: 系統會自動檢測模型的向量維度，無需手動配置
-*   **錯誤恢復**: 當索引文件損壞時，系統會自動重建索引
+    *   `metadata.json`: 元數據文件
+*   **支持的索引類型**: IndexFlatL2, IndexFlatIP, IndexIVFFlat, IndexHNSWFlat
 
-### 5.2 索引流程 (Indexing Workflow)
+### 6.2 索引流程
 
-1.  **文件掃描**: 遍歷指定文件夾，找出支持的文件類型
-2.  **內容解析**: 使用對應的 Parser 提取文件內容
-3.  **文本分塊**: 根據文件類型選擇合適的分塊策略
-4.  **向量化**: 使用嵌入模型將文本塊轉換為向量
-5.  **存儲**: 將向量和元數據存儲到 FAISS 索引中
+1.  文件掃描 → 內容解析 → 文本分塊 → 向量化 → 存儲
+2.  實時進度通過 SSE 推送到前端
 
-### 5.3 實時進度反饋 (Real-time Progress Feedback)
+### 6.3 索引 API
 
-使用 SSE (Server-Sent Events) 技術實現索引過程的實時進度反饋：
+*   `POST /api/index_folder`: 建立索引（SSE 流式返回進度）
+*   `POST /api/clear_index`: 清除所有索引
+*   `GET /api/indexed_folders`: 獲取已索引的文件夾列表
 
-*   **後端實現**: `api/index.py` 中的 `index_folder` 接口
-*   **前端實現**: `frontend/src/pages/Home.tsx` 中的 SSE 事件處理
-*   **進度事件類型**:
-    *   `init`: 初始化系統
-    *   `scanning`: 掃描文件
-    *   `start`: 開始索引，顯示總文件數
-    *   `progress`: 索引進度更新
-    *   `complete`: 索引完成
-    *   `error`: 錯誤處理
+### 6.4 搜索 API
 
-### 5.4 向量搜索 (Vector Search)
+*   `POST /api/vector_search`: 向量語義搜索
+*   `GET /api/search`: Everything 關鍵詞搜索
 
-*   **搜索接口**: `api/search.py` 中的 `vector_search` 接口
-*   **相似度計算**: 使用 L2 距離計算相似度（越小越相似）
-*   **結果格式**: 返回包含文件路徑、內容預覽、相似度分數的結果列表
-*   **錯誤處理**: 當搜索失敗時自動重建索引
+## 7. 測試腳本
 
-### 5.5 測試 (Testing)
-
-項目提供了測試腳本來驗證向量搜索功能：
-
-*   **`test/test_faiss.py`**: FAISS 向量存儲集成測試
+*   **`test/test_llm.py`**: LLM 模型測試脚本，直接調用 LocalLLM 測試提示詞
 *   **`test/test_embedding.py`**: 嵌入模型測試
+*   **`test/test_faiss.py`**: FAISS 向量存儲測試
 
 運行測試：
 ```powershell
-backend\venv\Scripts\python backend/test/test_faiss.py
+backend\venv\Scripts\python backend/test/test_llm.py
 ```
