@@ -16,7 +16,9 @@ export const API_ENDPOINTS = {
   OPEN_FOLDER: `${API_BASE_URL}/api/open-folder`,
   GET_ICON: `${API_BASE_URL}/api/icon`,
   EMBEDDING_MODELS: `${API_BASE_URL}/api/embedding/list`,
+  EMBEDDING_LOAD: `${API_BASE_URL}/api/embedding/load`,
   LLM_MODELS: `${API_BASE_URL}/api/llm/list`,
+  LLM_LOAD: `${API_BASE_URL}/api/llm/load`,
 } as const;
 
 export const DEFAULT_HEADERS = {
@@ -28,11 +30,10 @@ export async function apiRequest<T>(url: string, options: RequestInit = {}): Pro
     headers: DEFAULT_HEADERS,
     ...options,
   });
-
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
-
   return response.json();
 }
 

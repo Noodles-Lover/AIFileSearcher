@@ -141,12 +141,14 @@ const Settings: React.FC = () => {
     setSelectedEmbeddingModel(modelName);
     setSettingsSaving(true);
     try {
-      const settings = await saveSettings({ embedding_model: modelName });
-      setSelectedEmbeddingModel(settings.embedding_model);
-      message.success('嵌入模型设置已保存，重启并重建索引后生效');
+      message.loading({ content: '正在加载嵌入模型...', key: 'embedding' });
+      await apiPost(API_ENDPOINTS.EMBEDDING_LOAD, { model_name: modelName });
+      await saveSettings({ embedding_model: modelName });
+      setSelectedEmbeddingModel(modelName);
+      message.success({ content: `嵌入模型 [${modelName}] 加载成功`, key: 'embedding' });
     } catch (error) {
-      console.error('Failed to save embedding model setting:', error);
-      message.error('保存嵌入模型设置失败');
+      console.error('Failed to load embedding model:', error);
+      message.error({ content: '加载嵌入模型失败', key: 'embedding' });
       const settings = await loadSettings(true);
       setSelectedEmbeddingModel(settings.embedding_model);
     } finally {
@@ -158,12 +160,14 @@ const Settings: React.FC = () => {
     setSelectedLLMModel(modelName);
     setSettingsSaving(true);
     try {
-      const settings = await saveSettings({ llm_model: modelName });
-      setSelectedLLMModel(settings.llm_model);
-      message.success('LLM模型设置已保存');
+      message.loading({ content: '正在加载LLM模型...', key: 'llm' });
+      await apiPost(API_ENDPOINTS.LLM_LOAD, { model_name: modelName });
+      await saveSettings({ llm_model: modelName });
+      setSelectedLLMModel(modelName);
+      message.success({ content: `LLM模型 [${modelName}] 加载成功`, key: 'llm' });
     } catch (error) {
-      console.error('Failed to save LLM model setting:', error);
-      message.error('保存LLM模型设置失败');
+      console.error('Failed to load LLM model:', error);
+      message.error({ content: '加载LLM模型失败', key: 'llm' });
       const settings = await loadSettings(true);
       setSelectedLLMModel(settings.llm_model);
     } finally {

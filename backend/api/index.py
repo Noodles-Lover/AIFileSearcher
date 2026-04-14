@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from backend.RAG.SystemManager import system
+from backend.RAG.SystemManager import SystemManager
 from backend.RAG.FileCache import FileCache
 from backend.process.FileProcessor import FileProcessor
 from backend.utils.path_utils import get_project_root, get_data_path
@@ -64,13 +64,7 @@ def clear_index():
 
         folders_manager.clear()
 
-        if system.is_initialized and system.vector_store:
-            system.vector_store.index = None
-            system.vector_store.metadata = []
-
-        system.is_initialized = False
-        system.embedding_model = None
-        system.vector_store = None
+        SystemManager.reset_instance()
 
         print(f"索引和缓存已清空，删除文件: {', '.join(files_deleted)}")
 
@@ -130,10 +124,11 @@ def remove_indexed_folder(request: dict):
             indices_to_remove.update(indices)
             file_cache.remove_file_cache(file_path)
 
-        # 从向量数据库中删除对应的向量
-        if system.is_initialized and system.vector_store and system.vector_store.index and indices_to_remove:
-            system.vector_store.remove_vectors_by_indices(list(indices_to_remove))
-            system.vector_store.save()
+        sm = SystemManager.get_instance()
+        store = sm.get_vector_store()
+        if store and store.index and indices_to_remove:
+            store.remove_vectors_by_indices(list(indices_to_remove))
+            store.save()
 
         # 从已索引文件夹记录中移除
         folders_manager.remove_folder(folder_path)
@@ -163,10 +158,9 @@ async def index_folder(request: dict):
             project_root = get_project_root()
             
             # 初始化系统
-            current_embedding_model = settings_manager.load().get("embedding_model", "bge-m3")
-            system.ensure_embedding_model(current_embedding_model)
-            embedder = system.get_embedding_model()
-            store = system.get_vector_store()
+            sm = SystemManager.get_instance()
+            embedder = sm.get_embedding_model()
+            store = sm.get_vector_store()
             processor = FileProcessor()
             
             # 初始化文件缓存
@@ -321,7 +315,7 @@ async def index_folder(request: dict):
             
             # 添加总分块数统计
             try:
-                store = system.get_vector_store()
+                store = sm.get_vector_store()
                 if store and hasattr(store, 'index') and store.index:
                     total_chunks = store.index.ntotal
                     print(f"📊 數據庫統計: 總分塊數 {total_chunks}")

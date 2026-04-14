@@ -9,7 +9,7 @@ from backend.utils.path_utils import ensure_project_path
 ensure_project_path()
 
 from fastapi import APIRouter, HTTPException
-from backend.RAG.SystemManager import system
+from backend.RAG.SystemManager import SystemManager
 from backend.utils.settings_manager import settings_manager
 from backend.utils.everything_client import EverythingClient
 from backend.utils.search_utils import (
@@ -83,8 +83,9 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
         return {"results": []}
 
     try:
-        embedder = system.get_embedding_model()
-        store = system.get_vector_store()
+        sm = SystemManager.get_instance()
+        embedder = sm.get_embedding_model()
+        store = sm.get_vector_store()
 
         if not store or not hasattr(store, 'index') or store.index is None or store.index.ntotal == 0:
             return {"results": [], "msg": "向量數據庫為空或未初始化"}
@@ -233,8 +234,9 @@ def get_file_chunks(q: str, file_path: str):
         return {"chunks": []}
 
     try:
-        embedder = system.get_embedding_model()
-        store = system.get_vector_store()
+        sm = SystemManager.get_instance()
+        embedder = sm.get_embedding_model()
+        store = sm.get_vector_store()
 
         if not store or not hasattr(store, 'index') or store.index is None or store.index.ntotal == 0:
             return {"chunks": [], "msg": "向量數據庫為空或未初始化"}

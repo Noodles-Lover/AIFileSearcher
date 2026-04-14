@@ -104,7 +104,13 @@ class VectorStore:
         vectors_np = np.array(vectors).astype('float32')
 
         if hasattr(self.index, 'is_trained') and not self.index.is_trained:
-            self.index.train(vectors_np)
+            nlist = getattr(self.index, 'nlist', 4)
+            if len(vectors_np) >= nlist:
+                self.index.train(vectors_np)
+            elif len(vectors_np) >= 1:
+                if hasattr(self.index, 'nlist'):
+                    self.index.nlist = 1
+                self.index.train(vectors_np)
 
         self.index.add(vectors_np)
         self.metadata.extend(metas)
@@ -126,14 +132,17 @@ class VectorStore:
                 vectors_to_keep = self.index.reconstruct_batch(indices_to_keep)
                 metadata_to_keep = [self.metadata[i] for i in indices_to_keep]
 
-                self.index = create_index(self.index_type, self.dimension)
-                if hasattr(self.index, 'is_trained') and not self.index.is_trained:
-                    self.index.train(vectors_to_keep)
+                if len(vectors_to_keep) >= 4 and self.index_type.startswith("IndexIVF"):
+                    self.index = create_index(self.index_type, self.dimension)
+                    if hasattr(self.index, 'is_trained') and not self.index.is_trained:
+                        self.index.train(vectors_to_keep)
+                else:
+                    self.index = faiss.IndexFlatL2(self.dimension)
                 self.index.add(vectors_to_keep)
 
                 self.metadata = metadata_to_keep
             else:
-                self.index = create_index(self.index_type, self.dimension)
+                self.index = faiss.IndexFlatL2(self.dimension)
                 self.metadata = []
 
             self.save()

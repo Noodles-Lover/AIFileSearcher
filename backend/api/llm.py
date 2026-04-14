@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from backend.RAG.SystemManager import system
+from backend.RAG.SystemManager import SystemManager
 from backend.utils.settings_manager import settings_manager
 from backend.utils.model_utils import list_local_embedding_models, list_local_llm_models
 
@@ -17,11 +17,33 @@ def get_embedding_models():
     }
 
 
+@router.post("/api/embedding/load")
+def load_embedding_model(request: Dict[str, Any]):
+    model_name = (request.get("model_name") or "").strip()
+
+    if not model_name:
+        raise HTTPException(status_code=400, detail="model_name is required")
+
+    try:
+        sm = SystemManager.get_instance()
+        sm.reload_embedding_model(model_name=model_name)
+        settings_manager.save({"embedding_model": model_name})
+        return {
+            "success": True,
+            "model_name": model_name,
+            "status": "loaded",
+            "message": f"✅ 嵌入模型 [{model_name}] 加载成功",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/api/llm/list")
 def get_llm_models():
+    sm = SystemManager.get_instance()
     return {
         "models": list_local_llm_models(),
-        "current_model": system.current_llm_name or settings_manager.load().get("llm_model", ""),
+        "current_model": sm.current_llm_name or settings_manager.load().get("llm_model", ""),
     }
 
 
@@ -34,12 +56,14 @@ def load_llm(request: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="model_name is required")
 
     try:
-        system.load_local_llm(model_name=model_name, device=device)
+        sm = SystemManager.get_instance()
+        sm.reload_llm(model_name=model_name)
         settings_manager.save({"llm_model": model_name})
         return {
             "success": True,
             "model_name": model_name,
-            "device": device or "auto",
+            "status": "loaded",
+            "message": f"✅ LLM 模型 [{model_name}] 加载成功",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -47,31 +71,22 @@ def load_llm(request: Dict[str, Any]):
 
 @router.post("/api/llm/unload")
 def unload_llm():
-    system.unload_local_llm()
-    return {"success": True}
+    sm = SystemManager.get_instance()
+    sm.unload_llm()
+    return {"success": True, "message": "LLM 已卸载"}
 
 
 @router.post("/api/llm/generate")
 def generate_text(request: Dict[str, Any]):
     prompt = (request.get("prompt") or "").strip()
     system_prompt = (request.get("system_prompt") or "").strip()
-    max_new_tokens = request.get("max_new_tokens", 512)
-    temperature = request.get("temperature", 0.7)
-    top_p = request.get("top_p", 0.9)
-    model_name = (request.get("model_name") or "").strip() or None
 
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
     try:
-        result = system.generate_with_llm(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            model_name=model_name,
-        )
+        sm = SystemManager.get_instance()
+        result = sm.generate_with_llm(prompt=prompt, system_prompt=system_prompt)
         return {"result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

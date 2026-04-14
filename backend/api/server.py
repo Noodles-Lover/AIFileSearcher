@@ -7,20 +7,28 @@ from api.llm import router as llm_router
 
 app = FastAPI(title="AI File Searcher API")
 
-# 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置为具体的域名，开发环境可以用 *
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 包含文件相關路由
 app.include_router(files_router)
 app.include_router(search_router)
 app.include_router(index_router)
 app.include_router(llm_router)
+
+
+@app.on_event("startup")
+def on_startup():
+    from backend.RAG.SystemManager import SystemManager
+    print("=" * 50)
+    print("🚀 启动 AI File Searcher 后端服务")
+    print("=" * 50)
+    SystemManager.get_instance()
+
 
 @app.get("/")
 def read_root():
@@ -31,6 +39,5 @@ if __name__ == "__main__":
     print("=" * 50)
     print("🚀 启动 AI File Searcher 后端服务")
     print("=" * 50)
-    
-    # 允许外部访问，端口 8000
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

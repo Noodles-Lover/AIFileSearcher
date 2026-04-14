@@ -39,10 +39,11 @@ def test_local_data_paths():
         print("✓ All files exist in local_data directory")
         
         # Test SystemManager
-        from backend.RAG.SystemManager import system
-        
-        embedder = system.get_embedding_model()
-        store = system.get_vector_store()
+        from backend.RAG.SystemManager import SystemManager
+
+        sm = SystemManager.get_instance()
+        embedder = sm.get_embedding_model()
+        store = sm.get_vector_store()
         
         print("✓ SystemManager initialized successfully with local_data paths")
         

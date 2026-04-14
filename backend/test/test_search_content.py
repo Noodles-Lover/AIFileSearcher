@@ -15,11 +15,11 @@ def test_search_content():
     try:
         print("Testing search content field...")
         
-        from backend.RAG.SystemManager import system
-        
-        # Get system components
-        embedder = system.get_embedding_model()
-        store = system.get_vector_store()
+        from backend.RAG.SystemManager import SystemManager
+
+        sm = SystemManager.get_instance()
+        embedder = sm.get_embedding_model()
+        store = sm.get_vector_store()
         
         if not store or store.index.ntotal == 0:
             print("⚠️ No vectors in database, adding test data...")
