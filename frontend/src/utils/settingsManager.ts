@@ -1,7 +1,9 @@
 export interface AppSettings {
   include_subfolders: boolean;
   embedding_model: string;
+  llm_provider: 'local' | 'deepseek';
   llm_model: string;
+  deepseek_api_key: string;
   query_rewrite_enabled: boolean;
 }
 
@@ -11,7 +13,9 @@ const SETTINGS_FILE_PATH = 'local_data/settings.json';
 const DEFAULT_SETTINGS: AppSettings = {
   include_subfolders: false,
   embedding_model: 'bge-m3',
+  llm_provider: 'local',
   llm_model: '',
+  deepseek_api_key: '',
   query_rewrite_enabled: false,
 };
 

@@ -133,44 +133,77 @@ def calculate_dynamic_chunk_count(decay_rate: int, total_chunks: int, base_k: in
     return min(total_chunks, k)
 
 
-QUERY_REWRITE_TEMPLATE = """请将以下搜索查询改写成更精确、更明确的表述。
+QUERY_REWRITE_TEMPLATE = """这是一个语义文件检索系统。你的任务是将用户查询改写为更有利于向量检索的搜索表达。
 
-原始查询：{query}
+优化目标：
+1. 保留原始核心语义
+2. 扩展相关关键词（同义词、相关术语、常见表达）
+3. 使用“关键词组合”而不是长句解释
+4. 尽量覆盖用户可能想查找的不同表达方式
+5. 避免无关扩展和过度解释
 
-要求：
-1. 保留原意
-2. 使表述更清晰准确
-3. 可以添加必要的上下文信息
-4. 返回改写后的查询即可，不要其他内容
+改写要求：
+* 输出应为一个“短语或关键词集合”，可以包含多个表达
+* 不要写成完整解释性句子
+* 不要添加额外说明或前后缀
+* 不要输出多余文本
+
+示例：
+用户查询：苹果
+改写输出：苹果 水果 苹果营养 苹果特点 水果营养价值
+
+用户查询：缓存怎么优化
+改写输出：缓存优化 缓存性能提升 缓存策略 缓存机制 缓存设计
+
+---
+
+这是用户的查询：
+{query}
 """
 
 
-def rewrite_query_with_llm(query: str) -> str:
+def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> str:
     """
-    使用LLM重寫查詢
+    使用 LLM 重写查询
+
+    Args:
+        query: 用户查询
+        use_deepseek: 是否使用 DeepSeek API (True=API, False=本地模型)
     """
-    current_settings = settings_manager.load()
-    llm_model = current_settings.get("llm_model", "")
-
-    if not llm_model:
-        raise ValueError("未配置LLM模型，請先在設置中選擇LLM模型")
-
     try:
-        sm = SystemManager.get_instance()
-        sm.load_llm(model_name=llm_model)
-        llm = sm.get_llm()
+        if use_deepseek:
+            # 使用 DeepSeek API
+            from backend.RAG.DeepSeekLLM import DeepSeekLLM
+            llm = DeepSeekLLM()
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+            rewritten = llm.generate(
+                prompt=prompt,
+                max_tokens=256,
+                temperature=0.7,
+                top_p=0.9,
+            )
+        else:
+            # 使用本地模型
+            current_settings = settings_manager.load()
+            llm_model = current_settings.get("llm_model", "")
 
-        prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+            if not llm_model:
+                raise ValueError("未配置本地 LLM 模型，请在设置中选择")
 
-        rewritten = llm.generate(
-            prompt=prompt,
-            system_prompt="",
-            max_new_tokens=256,
-            temperature=0.7,
-            top_p=0.9,
-        )
+            sm = SystemManager.get_instance()
+            sm.load_llm(model_name=llm_model)
+            llm = sm.get_llm()
+
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+            rewritten = llm.generate(
+                prompt=prompt,
+                system_prompt="",
+                max_new_tokens=256,
+                temperature=0.7,
+                top_p=0.9,
+            )
 
         return rewritten.strip()
 
     except Exception as e:
-        raise RuntimeError(f"LLM調用失敗: {str(e)}")
+        raise RuntimeError(f"LLM 调用失败: {str(e)}")

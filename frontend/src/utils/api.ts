@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   EMBEDDING_LOAD: `${API_BASE_URL}/api/embedding/load`,
   LLM_MODELS: `${API_BASE_URL}/api/llm/list`,
   LLM_LOAD: `${API_BASE_URL}/api/llm/load`,
+  LLM_CONFIG: `${API_BASE_URL}/api/llm/config`,
 } as const;
 
 export const DEFAULT_HEADERS = {

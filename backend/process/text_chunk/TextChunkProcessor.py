@@ -50,8 +50,7 @@ class TextChunkProcessor(BaseFileProcessor):
 
 from .TXTParser import TXTParser
 from .PDFParser import PDFParser
-from .DocxParser import DocxParser
-from .DocParser import DocParser
+from .DocParser import DocParser  # 同时处理 .doc 和 .docx
 from .PPTParser import PPTParser
 from .MDParser import MDParser
 from .ImageParser import ImageParser
@@ -59,8 +58,8 @@ from .ImageParser import ImageParser
 TextChunkProcessor.PARSER_MAPPING.update({
     '.txt': TXTParser,
     '.pdf': PDFParser,
-    '.docx': DocxParser,
     '.doc': DocParser,
+    '.docx': DocParser,  # 与 .doc 共用同一解析器
     '.pptx': PPTParser,
     '.md': MDParser,
     '.png': ImageParser,

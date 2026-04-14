@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Empty,
+  Input,
   Layout,
   message,
   Modal,
@@ -18,6 +19,7 @@ import {
   DeleteOutlined,
   ExclamationCircleOutlined,
   FolderOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 
 import SettingSection from '../components/SettingSection';
@@ -36,8 +38,11 @@ interface IndexedFoldersResponse {
 }
 
 interface ModelsResponse {
+  providers?: string[];
   models: string[];
+  current_provider?: string;
   current_model: string;
+  has_api_key?: boolean;
 }
 
 const { Header, Content } = Layout;
@@ -70,7 +75,9 @@ const Settings: React.FC = () => {
   const [availableEmbeddingModels, setAvailableEmbeddingModels] = useState<string[]>([]);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('bge-m3');
   const [availableLLMModels, setAvailableLLMModels] = useState<string[]>([]);
+  const [selectedLLMProvider, setSelectedLLMProvider] = useState<'local' | 'deepseek'>('local');
   const [selectedLLMModel, setSelectedLLMModel] = useState('');
+  const [deepseekApiKey, setDeepseekApiKey] = useState('');
   const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
   const [selectedIndexType, setSelectedIndexType] = useState('IndexFlatL2');
   const [folders, setFolders] = useState<string[]>([]);
@@ -97,7 +104,9 @@ const Settings: React.FC = () => {
       const settings = await loadSettings(true);
       setIncludeSubfolders(settings.include_subfolders);
       setSelectedEmbeddingModel(settings.embedding_model || 'bge-m3');
+      setSelectedLLMProvider(settings.llm_provider || 'local');
       setSelectedLLMModel(settings.llm_model || '');
+      setDeepseekApiKey(settings.deepseek_api_key || '');
       setQueryRewriteEnabled(settings.query_rewrite_enabled || false);
       setSelectedIndexType(settings.index_type || 'IndexFlatL2');
 
@@ -156,12 +165,33 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleLLMProviderChange = async (provider: 'local' | 'deepseek') => {
+    setSelectedLLMProvider(provider);
+    setSettingsSaving(true);
+    try {
+      if (provider === 'deepseek') {
+        // DeepSeek 模式只需要保存 provider
+        await saveSettings({ llm_provider: provider });
+        message.success('已切换到 DeepSeek API 模式');
+      } else {
+        // 本地模式
+        await saveSettings({ llm_provider: provider });
+        message.success('已切换到本地模型模式');
+      }
+    } catch (error) {
+      console.error('Failed to change LLM provider:', error);
+      message.error('切换失败');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   const handleLLMModelChange = async (modelName: string) => {
     setSelectedLLMModel(modelName);
     setSettingsSaving(true);
     try {
       message.loading({ content: '正在加载LLM模型...', key: 'llm' });
-      await apiPost(API_ENDPOINTS.LLM_LOAD, { model_name: modelName });
+      await apiPost(API_ENDPOINTS.LLM_LOAD, { provider: selectedLLMProvider, model_name: modelName });
       await saveSettings({ llm_model: modelName });
       setSelectedLLMModel(modelName);
       message.success({ content: `LLM模型 [${modelName}] 加载成功`, key: 'llm' });
@@ -170,6 +200,33 @@ const Settings: React.FC = () => {
       message.error({ content: '加载LLM模型失败', key: 'llm' });
       const settings = await loadSettings(true);
       setSelectedLLMModel(settings.llm_model);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleDeepseekApiKeyChange = async (apiKey: string) => {
+    setDeepseekApiKey(apiKey);
+  };
+
+  const handleDeepseekApiKeySave = async () => {
+    if (!deepseekApiKey.trim()) {
+      message.warning('请输入 API Key');
+      return;
+    }
+    setSettingsSaving(true);
+    try {
+      message.loading({ content: '正在配置 DeepSeek API...', key: 'deepseek' });
+      await apiPost(API_ENDPOINTS.LLM_CONFIG, {
+        provider: 'deepseek',
+        api_key: deepseekApiKey.trim(),
+        model_name: 'deepseek-chat',
+      });
+      await saveSettings({ deepseek_api_key: deepseekApiKey.trim() });
+      message.success({ content: 'DeepSeek API 配置成功', key: 'deepseek' });
+    } catch (error) {
+      console.error('Failed to config DeepSeek API:', error);
+      message.error({ content: 'DeepSeek API 配置失败', key: 'deepseek' });
     } finally {
       setSettingsSaving(false);
     }
@@ -296,6 +353,11 @@ const Settings: React.FC = () => {
     value: model,
   }));
 
+  const llmProviderOptions = [
+    { label: '本地模型', value: 'local' },
+    { label: 'DeepSeek API', value: 'deepseek' },
+  ];
+
   const llmModelOptions = [
     { label: '未选择', value: '' },
     ...Array.from(new Set([selectedLLMModel, ...availableLLMModels])).map((model) => ({
@@ -350,20 +412,61 @@ const Settings: React.FC = () => {
 
               <div style={{ ...styles.rowTop, marginTop: '16px' }}>
                 <div>
-                  <Text strong>LLM模型</Text>
+                  <Text strong>LLM 提供商</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
-                    自动读取 `models/LLM` 文件夹。用于查询重写功能。
+                    选择使用本地模型还是 DeepSeek API
                   </Text>
                 </div>
                 <Select
-                  value={selectedLLMModel}
-                  options={llmModelOptions}
-                  onChange={handleLLMModelChange}
+                  value={selectedLLMProvider}
+                  options={llmProviderOptions}
+                  onChange={handleLLMProviderChange}
                   style={styles.modelSelect}
-                  placeholder="请选择LLM模型"
+                  placeholder="请选择 LLM 提供商"
                 />
               </div>
+
+              {selectedLLMProvider === 'deepseek' ? (
+                <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <Text strong>DeepSeek API Key</Text>
+                    <br />
+                    <Text type="secondary" style={styles.secondaryText}>
+                      输入您的 DeepSeek API Key，用于调用云端大模型
+                    </Text>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <Input.Password
+                        value={deepseekApiKey}
+                        onChange={(e) => handleDeepseekApiKeyChange(e.target.value)}
+                        placeholder="sk-..."
+                        style={{ flex: 1 }}
+                        prefix={<KeyOutlined />}
+                      />
+                      <Button type="primary" onClick={handleDeepseekApiKeySave} loading={settingsSaving}>
+                        保存
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                  <div>
+                    <Text strong>本地 LLM 模型</Text>
+                    <br />
+                    <Text type="secondary" style={styles.secondaryText}>
+                      自动读取 `models/LLM` 文件夹。用于查询重写功能。
+                    </Text>
+                  </div>
+                  <Select
+                    value={selectedLLMModel}
+                    options={llmModelOptions}
+                    onChange={handleLLMModelChange}
+                    style={styles.modelSelect}
+                    placeholder="请选择 LLM 模型"
+                  />
+                </div>
+              )}
 
               <div style={{ ...styles.rowTop, marginTop: '16px' }}>
                 <div>
@@ -388,10 +491,14 @@ const Settings: React.FC = () => {
                   <Text strong>启用查询重写</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
-                    使用LLM优化搜索关键词，提升语义搜索准确率。需要先选择LLM模型。
+                    使用LLM优化搜索关键词，提升语义搜索准确率。需要先配置好 LLM。
                   </Text>
                 </div>
-                <Switch checked={queryRewriteEnabled} onChange={handleQueryRewriteChange} disabled={!selectedLLMModel} />
+                <Switch
+                  checked={queryRewriteEnabled}
+                  onChange={handleQueryRewriteChange}
+                  disabled={selectedLLMProvider === 'local' && !selectedLLMModel}
+                />
               </div>
             </Spin>
           </SettingSection>
