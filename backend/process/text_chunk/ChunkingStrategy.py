@@ -90,4 +90,5 @@ ChunkingStrategy.DEFAULT_STRATEGIES = {
     '.docx': FixedSizeChunking(chunk_size=500, overlap=50),
     '.doc': FixedSizeChunking(chunk_size=500, overlap=50),
     '.pptx': FixedSizeChunking(chunk_size=500, overlap=50),
+    '.ppt': FixedSizeChunking(chunk_size=500, overlap=50),
 }

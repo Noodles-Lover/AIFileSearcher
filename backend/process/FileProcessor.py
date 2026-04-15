@@ -24,7 +24,7 @@ EXTENSION_PROCESSOR = {
         ".html", ".htm", ".css", ".scss",
         ".ipynb", ".log", ".sh", ".bash", ".zsh", ".bat",
         ".sql",
-        ".pptx",
+        ".pptx", ".ppt",
     },
     "semi_structured": {
         ".xls", ".xlsx", ".ods",

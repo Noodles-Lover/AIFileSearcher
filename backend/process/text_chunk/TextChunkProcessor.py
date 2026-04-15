@@ -61,6 +61,7 @@ TextChunkProcessor.PARSER_MAPPING.update({
     '.doc': DocParser,
     '.docx': DocParser,  # 与 .doc 共用同一解析器
     '.pptx': PPTParser,
+    '.ppt': PPTParser,    # 与 .pptx 共用同一解析器
     '.md': MDParser,
     '.png': ImageParser,
     '.jpg': ImageParser,
