@@ -23,8 +23,8 @@ import numpy as np
 
 # 导入配置和工具
 from eval_config import (
-    CURRENT_TEST_TYPE, EMBEDDING_MODEL, EMBEDDING_MODEL_PATH, INDEX_TYPE, 
-    CHUNKING_STRATEGY, ENABLE_QUERY_REWRITE, LLM_TYPE, PROJECT_ROOT,
+    CURRENT_TEST_TYPE, EMBEDDING_MODEL, EMBEDDING_MODEL_PATH, INDEX_TYPE,
+    ALL_CHUNKING_STRATEGIES, ENABLE_QUERY_REWRITE, LLM_TYPE, PROJECT_ROOT,
     get_chunking_name
 )
 from eval_reporter import EvalReporter
@@ -50,12 +50,6 @@ def get_model_folder_size(model_path: str) -> int:
                 if os.path.exists(fp):
                     total_size += os.path.getsize(fp)
     return total_size
-
-
-def get_memory_usage_mb() -> float:
-    """获取当前进程内存占用（MB）"""
-    current, _ = tracemalloc.get_traced_memory()
-    return current / (1024 * 1024)
 
 
 def snapshot_memory() -> dict:
@@ -242,7 +236,7 @@ def extract_category(filename):
 
 def evaluate_retrieval(store, embedder, query: str, expected_category: str, 
                        use_rewrite: bool = True) -> dict:
-    """评估单次检索"""
+    """评估单次检索（以文件为单位去重计算）"""
     rewritten = None
     search_query = query
     if use_rewrite:
@@ -255,22 +249,34 @@ def evaluate_retrieval(store, embedder, query: str, expected_category: str,
     query_vector = embedder.encode([search_query])[0]
     encode_time = time.time() - encode_start
     
-    # 检索
+    # 检索（获取更多结果以便去重）
     search_start = time.time()
-    results = store.search(query_vector, k=5)
+    all_results = store.search(query_vector, k=20)  # 检索更多以便文件去重
     search_time = time.time() - search_start
     
-    top_1 = results[:1]
-    top_3 = results[:3]
+    # 按文件去重（保持原有顺序）
+    seen_files = set()
+    unique_results = []
+    for r in all_results:
+        file_path = r.get('file_path', '')
+        if file_path not in seen_files:
+            seen_files.add(file_path)
+            unique_results.append(r)
     
+    # 取去重后的 top-3
+    top_1_file = unique_results[:1]
+    top_3_files = unique_results[:3]
+    
+    # P@1: top-1 文件是否匹配期望分类
     p_at_1 = 0.0
-    for r in top_1:
+    for r in top_1_file:
         if r.get('category') == expected_category:
             p_at_1 = 1.0
             break
     
+    # P@3: top-3 中有多少个不同文件匹配（去重后）
     hit_count = 0
-    for r in top_3:
+    for r in top_3_files:
         if r.get('category') == expected_category:
             hit_count += 1
     p_at_3 = hit_count / 3.0
@@ -278,7 +284,8 @@ def evaluate_retrieval(store, embedder, query: str, expected_category: str,
     return {
         "original_query": query,
         "rewritten_query": rewritten,
-        "results": results,
+        "results": unique_results[:5],  # 返回去重后的前5个文件
+        "all_results": unique_results,  # 保留完整去重结果用于MRR计算
         "hit": p_at_1 > 0 or p_at_3 > 0,
         "precision_at_1": p_at_1,
         "precision_at_3": p_at_3,
@@ -290,7 +297,7 @@ def evaluate_retrieval(store, embedder, query: str, expected_category: str,
 
 
 def print_result(result: dict, index: int = None):
-    """打印单个检索结果"""
+    """打印单个检索结果（文件级别，去重）"""
     prefix = f"[{index}] " if index else ""
     
     print(f"\n{prefix}Query: {result['original_query']}")
@@ -300,7 +307,9 @@ def print_result(result: dict, index: int = None):
     
     print(f"      Expected: {result.get('expected_category', 'N/A')}")
     
-    for i, r in enumerate(result['results'][:3]):
+    # 使用 all_results（去重后的完整列表）显示前5个文件
+    display_results = result.get('all_results', result['results'])[:5]
+    for i, r in enumerate(display_results[:3]):  # 只显示前3
         category = r.get('category', 'unknown')
         filename = r.get('file_name', 'unknown')
         score = r.get('score', 0.0)
@@ -309,33 +318,42 @@ def print_result(result: dict, index: int = None):
 
 
 def calculate_metrics(all_results: list) -> dict:
-    """计算总体评估指标"""
+    """计算总体评估指标（以文件为单位）"""
     n = len(all_results)
     
     p_at_1 = [r['precision_at_1'] for r in all_results]
     p_at_3 = [r['precision_at_3'] for r in all_results]
     
+    # MRR: 基于去重后的文件列表计算
     mrr = 0.0
     for r in all_results:
-        for i, res in enumerate(r['results']):
-            if res.get('category') == r.get('expected_category'):
+        expected = r.get('expected_category')
+        for i, res in enumerate(r.get('all_results', r['results'])):
+            if res.get('category') == expected:
                 mrr += 1.0 / (i + 1)
                 break
     
+    # Hit Rate@3: top-3 中是否有任何匹配
     hit_at_3 = sum(1 for r in all_results if r['category_hits']['top3'] > 0)
     total_encode_time = sum(r['encode_time'] for r in all_results)
     total_search_time = sum(r['search_time'] for r in all_results)
+    total_retrieval_time = total_encode_time + total_search_time
     
     return {
-        "precision_at_1": float(np.mean(p_at_1)),
-        "precision_at_3": float(np.mean(p_at_3)),
-        "mrr": float(mrr / n if n > 0 else 0.0),
-        "hit_rate_at_3": float(hit_at_3 / n if n > 0 else 0.0),
+        "precision_at_1": round(float(np.mean(p_at_1)), 4),
+        "precision_at_3": round(float(np.mean(p_at_3)), 4),
+        "mrr": round(float(mrr / n if n > 0 else 0.0), 4),
+        "hit_rate_at_3": round(float(hit_at_3 / n if n > 0 else 0.0), 4),
         "total": n,
         "hits": sum(1 for r in all_results if r['hit']),
-        "avg_encode_time": float(total_encode_time / n if n > 0 else 0),
-        "avg_search_time": float(total_search_time / n if n > 0 else 0),
-        "avg_total_time": float((total_encode_time + total_search_time) / n if n > 0 else 0)
+        # 检索时间（总）
+        "total_encode_time": round(float(total_encode_time), 4),
+        "total_search_time": round(float(total_search_time), 4),
+        "total_retrieval_time": round(float(total_retrieval_time), 4),
+        # 检索时间（平均）
+        "avg_encode_time": round(float(total_encode_time / n if n > 0 else 0), 4),
+        "avg_search_time": round(float(total_search_time / n if n > 0 else 0), 4),
+        "avg_retrieval_time": round(float(total_retrieval_time / n if n > 0 else 0), 4)
     }
 
 
@@ -393,57 +411,37 @@ def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict
     print("=" * 60)
 
 
-def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict) -> dict:
+def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict, chunking_strategy: str) -> dict:
     """构建性能数据（用于导出）"""
     file_count = len(stats['per_file_stats'])
-    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
     
     return {
-        "meta": {
-            "embedding_model": EMBEDDING_MODEL,
-            "model_path": EMBEDDING_MODEL_PATH,
-            "model_size": format_size(model_size),
-            "model_load_time": model_load_time,
-            "index_type": INDEX_TYPE,
-            "chunking_strategy": get_chunking_name(),
-            "index_size": format_size(get_index_size())
-        },
         "memory": {
-            "after_load_mb": mem_after_load['current_mb'],
-            "peak_mb": mem_after_load['peak_mb']
+            "after_load_mb": round(mem_after_load['current_mb'], 2),
+            "peak_mb": round(mem_after_load['peak_mb'], 2)
         },
         "stats": {
             "file_count": file_count,
             "total_chunks": stats['total_chunks'],
             "vector_count": stats['metadata'],
-            "chunk_time": stats['chunk_time'],
-            "vector_time": stats['vector_time'],
-            "avg_chunk_per_file": stats['chunk_time'] / file_count * 1000 if file_count > 0 else 0,
-            "avg_vector_per_file": stats['vector_time'] / file_count * 1000 if file_count > 0 else 0,
-            "avg_vector_per_chunk": stats['vector_time'] / stats['total_chunks'] * 1000 if stats['total_chunks'] > 0 else 0
+            "chunk_time": round(stats['chunk_time'], 4),
+            "vector_time": round(stats['vector_time'], 4),
+            "avg_chunk_per_file": round(stats['chunk_time'] / file_count * 1000, 2) if file_count > 0 else 0,
+            "avg_vector_per_file": round(stats['vector_time'] / file_count * 1000, 2) if file_count > 0 else 0,
+            "avg_vector_per_chunk": round(stats['vector_time'] / stats['total_chunks'] * 1000, 2) if stats['total_chunks'] > 0 else 0
         }
     }
 
 
 # ============================================================
-# 主流程
+# 单次评估流程
 # ============================================================
 
-def main():
-    # 启动内存追踪
-    tracemalloc.start()
-    
+def run_single_evaluation(strategy, strategy_name):
+    """运行单次评估"""
+    print("\n" + "=" * 60)
+    print(f"Evaluating: {strategy_name}")
     print("=" * 60)
-    print("AIFileSearcher Retrieval Evaluation")
-    print("=" * 60)
-    
-    print(f"\n【Configuration】")
-    print(f"  Embedding Model: {EMBEDDING_MODEL}")
-    print(f"  Index Type: {INDEX_TYPE}")
-    print(f"  Chunking Strategy: {get_chunking_name()}")
-    print(f"  LLM Rewrite: {'Enabled' if ENABLE_QUERY_REWRITE else 'Disabled'}")
-    print(f"  LLM Type: {LLM_TYPE}")
-    print(f"  Test Type: {CURRENT_TEST_TYPE}")
     
     # 加载测试用例
     with open(TEST_CASES_FILE, 'r', encoding='utf-8') as f:
@@ -451,7 +449,7 @@ def main():
     test_queries = test_cases["queries"]
     test_path = test_cases["path"]
     
-    print(f"\n[Config] Test path: {test_path}")
+    print(f"[Config] Test path: {test_path}")
     print(f"[Config] Queries: {len(test_queries)}")
     
     # Step 1: 清空索引
@@ -471,8 +469,8 @@ def main():
     
     # 创建文件处理器
     processor = FileProcessor()
-    if CHUNKING_STRATEGY:
-        processor.chunking_strategy = CHUNKING_STRATEGY
+    if strategy:
+        processor.chunking_strategy = strategy
     
     # Step 3: 索引测试文件
     print("\n[Step 3] Indexing test files...")
@@ -519,7 +517,7 @@ def main():
     print_metrics(metrics)
     
     # Step 6: 打印性能统计
-    performance = build_performance_data(index_stats, model_load_time, mem_after_load)
+    performance = build_performance_data(index_stats, model_load_time, mem_after_load, strategy_name)
     print_performance_stats(index_stats, model_load_time, mem_after_load)
     
     # Step 7: 导出结果
@@ -528,7 +526,7 @@ def main():
         test_type=CURRENT_TEST_TYPE,
         embedding_model=EMBEDDING_MODEL,
         index_type=INDEX_TYPE,
-        chunking_name=get_chunking_name(),
+        chunking_name=strategy_name,
         metrics=metrics,
         performance=performance
     )
@@ -537,7 +535,7 @@ def main():
         test_type=CURRENT_TEST_TYPE,
         embedding_model=EMBEDDING_MODEL,
         index_type=INDEX_TYPE,
-        chunking_name=get_chunking_name(),
+        chunking_name=strategy_name,
         metrics=metrics,
         performance=performance,
         seq=seq
@@ -547,7 +545,51 @@ def main():
     print(f"  JSON: {json_path}")
     print(f"  TXT:  {txt_path}")
     
-    print("\n[Done] Evaluation complete!")
+    return metrics, index_stats
+
+
+# ============================================================
+# 主流程
+# ============================================================
+
+def main():
+    # 启动内存追踪
+    tracemalloc.start()
+    
+    print("=" * 60)
+    print("AIFileSearcher Retrieval Evaluation")
+    print("=" * 60)
+    
+    print(f"\n【Configuration】")
+    print(f"  Embedding Model: {EMBEDDING_MODEL}")
+    print(f"  Index Type: {INDEX_TYPE}")
+    print(f"  LLM Rewrite: {'Enabled' if ENABLE_QUERY_REWRITE else 'Disabled'}")
+    print(f"  LLM Type: {LLM_TYPE}")
+    print(f"  Test Type: {CURRENT_TEST_TYPE}")
+    
+    # 遍历所有分块策略
+    results_summary = []
+    for strategy in ALL_CHUNKING_STRATEGIES:
+        strategy_name = str(strategy)
+        metrics, stats = run_single_evaluation(strategy, strategy_name)
+        results_summary.append({
+            "strategy": strategy_name,
+            "metrics": metrics,
+            "chunks": stats['total_chunks']
+        })
+    
+    # 打印汇总
+    print("\n" + "=" * 60)
+    print("SUMMARY - All Chunking Strategies")
+    print("=" * 60)
+    print(f"{'Strategy':<40} {'P@1':>6} {'P@3':>6} {'MRR':>6} {'Chunks':>6}")
+    print("-" * 70)
+    for r in results_summary:
+        m = r['metrics']
+        print(f"{r['strategy']:<40} {m['precision_at_1']:>6.4f} {m['precision_at_3']:>6.4f} {m['mrr']:>6.4f} {r['chunks']:>6}")
+    print("=" * 60)
+    
+    print("\n[Done] All evaluations complete!")
 
 
 if __name__ == "__main__":

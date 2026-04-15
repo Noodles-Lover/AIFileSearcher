@@ -94,6 +94,9 @@ class EvalReporter:
         filename = f"{base_name}-{seq}.txt"
         filepath = os.path.join(self.result_dir, filename)
 
+        memory = performance.get('memory', {})
+        perf_stats = performance.get('stats', {})
+
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write("=" * 60 + "\n")
             f.write("EVALUATION METRICS\n")
@@ -105,31 +108,29 @@ class EvalReporter:
             f.write(f"MRR:                {metrics.get('mrr', 0):.4f}\n")
             f.write(f"Hit Rate@3:         {metrics.get('hit_rate_at_3', 0):.4f}\n")
             f.write("\n")
+            f.write("Retrieval Time (Total):\n")
+            f.write(f"  Encode:          {metrics.get('total_encode_time', 0)*1000:.2f}ms\n")
+            f.write(f"  Search:          {metrics.get('total_search_time', 0)*1000:.2f}ms\n")
+            f.write(f"  Total:           {metrics.get('total_retrieval_time', 0)*1000:.2f}ms\n")
+            f.write("\n")
+            f.write("Retrieval Time (Avg):\n")
+            f.write(f"  Encode:          {metrics.get('avg_encode_time', 0)*1000:.2f}ms\n")
+            f.write(f"  Search:          {metrics.get('avg_search_time', 0)*1000:.2f}ms\n")
+            f.write(f"  Total:           {metrics.get('avg_retrieval_time', 0)*1000:.2f}ms\n")
+            f.write("\n")
             f.write("=" * 60 + "\n")
             f.write("PERFORMANCE STATISTICS\n")
             f.write("=" * 60 + "\n")
             
-            perf_meta = performance.get('meta', {})
-            f.write(f"\n【Model Loading】\n")
-            f.write(f"  Embedding Model: {perf_meta.get('embedding_model', 'N/A')}\n")
-            f.write(f"  Model Size: {perf_meta.get('model_size', 'N/A')}\n")
-            f.write(f"  Load Time: {perf_meta.get('model_load_time', 0):.2f}s\n")
-            
-            memory = performance.get('memory', {})
-            if memory:
-                f.write(f"  Memory After Load: {memory.get('after_load_mb', 'N/A')} MB\n")
-                f.write(f"  Peak Memory: {memory.get('peak_mb', 'N/A')} MB\n")
-            
+            # 从顶层 meta 参数获取模型信息（与 JSON 导出保持一致）
             f.write(f"\n【Index Config】\n")
-            f.write(f"  Index Type: {perf_meta.get('index_type', 'N/A')}\n")
-            f.write(f"  Chunking Strategy: {perf_meta.get('chunking_strategy', 'N/A')}\n")
+            f.write(f"  Index Type: {index_type}\n")
+            f.write(f"  Chunking Strategy: {chunking_name}\n")
             
-            perf_stats = performance.get('stats', {})
             f.write(f"\n【Index Stats】\n")
             f.write(f"  Files Processed: {perf_stats.get('file_count', 0)}\n")
             f.write(f"  Total Chunks: {perf_stats.get('total_chunks', 0)}\n")
             f.write(f"  Index Vectors: {perf_stats.get('vector_count', 0)}\n")
-            f.write(f"  Index Size: {perf_meta.get('index_size', 'N/A')}\n")
             
             f.write(f"\n【Time Stats】\n")
             f.write(f"  Total Chunking Time: {perf_stats.get('chunk_time', 0):.3f}s\n")

@@ -69,11 +69,13 @@ class FileProcessor:
         vector_store=None,
         embedding_model=None,
         llm_client=None,
+        chunking_strategy=None,
     ):
         self.processing_mode = processing_mode
         self.vector_store = vector_store
         self.embedding_model = embedding_model
         self.llm_client = llm_client
+        self.chunking_strategy = chunking_strategy
 
     def set_processing_mode(self, mode: ProcessingMode):
         self.processing_mode = mode
@@ -86,6 +88,9 @@ class FileProcessor:
 
     def set_llm_client(self, llm_client):
         self.llm_client = llm_client
+
+    def set_chunking_strategy(self, strategy):
+        self.chunking_strategy = strategy
 
     def is_supported_file(self, file_path: str) -> bool:
         return _get_processor_type(file_path) is not None
@@ -118,12 +123,17 @@ class FileProcessor:
             return {"error": f"No parser for file type: {ext}"}
 
         try:
-            parser = parser_cls(
-                file_path,
-                vector_store=self.vector_store,
-                embedding_model=self.embedding_model,
-                llm_client=self.llm_client,
-            )
+            parser_kwargs = {
+                "file_path": file_path,
+                "vector_store": self.vector_store,
+                "embedding_model": self.embedding_model,
+                "llm_client": self.llm_client,
+            }
+            # 如果有自定义分块策略且是 TextChunkProcessor，传递它
+            if self.chunking_strategy and processor_type == "text_chunk":
+                parser_kwargs["chunking_strategy"] = self.chunking_strategy
+            
+            parser = parser_cls(**parser_kwargs)
             result = parser.get_text()
 
             if isinstance(result, list):

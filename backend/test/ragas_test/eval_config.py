@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 TEST_CASES_FILE = None  # 动态设置
 
 # 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "md"
+CURRENT_TEST_TYPE = "txt"
 
 # ============ 性能测试参数 ============
 
@@ -20,13 +20,25 @@ EMBEDDING_MODEL = "bge-m3"
 EMBEDDING_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "embedding", EMBEDDING_MODEL)
 
 # 索引类型：IndexFlatL2, IndexFlatIP, IndexIVFFlat, IndexHNSWFlat
-INDEX_TYPE = "IndexIVFFlat"
+INDEX_TYPE = "IndexFlatL2"
 
 # 分块策略（直接指定策略类）
-# 可选：FixedSizeChunking, ParagraphChunking, SentenceChunking
-# 如需自定义参数，可直接实例化，如：
-# CHUNKING_STRATEGY = FixedSizeChunking(chunk_size=500, overlap=50)
-CHUNKING_STRATEGY = None  # None 表示使用各文件类型的默认策略
+# 可选：SlidingWindowChunking, FixedSizeChunking, ParagraphChunking, SentenceChunking
+from backend.process.text_chunk.ChunkingStrategy import (
+    ChunkingStrategy, SlidingWindowChunking, FixedSizeChunking, 
+    ParagraphChunking, SentenceChunking
+)
+
+# 所有要测试的分块策略（遍历时会使用此列表）
+ALL_CHUNKING_STRATEGIES = [
+    SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=100),
+    FixedSizeChunking(chunk_size=500),
+    SentenceChunking(max_chars=500),
+    ParagraphChunking(lines_per_para=5, min_para_chars=50),
+]
+
+# 当前策略（用于单次测试，直接指定一个策略对象）
+CHUNKING_STRATEGY = None
 
 # ============ 其他配置 ============
 
@@ -40,5 +52,5 @@ LLM_TYPE = "deepseek"
 def get_chunking_name():
     """获取分块策略名称"""
     if CHUNKING_STRATEGY is None:
-        return "Default"
-    return CHUNKING_STRATEGY.__class__.__name__
+        return "Native"  # 表示使用各文件类型的原生默认策略
+    return str(CHUNKING_STRATEGY)

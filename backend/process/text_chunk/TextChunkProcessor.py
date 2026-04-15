@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Any, Optional, Type
 from backend.process.BaseFileProcessor import BaseFileProcessor
-from .ChunkingStrategy import ChunkingStrategy, FixedSizeChunking, ParagraphChunking
+from .ChunkingStrategy import ChunkingStrategy, SlidingWindowChunking, FixedSizeChunking, ParagraphChunking, SentenceChunking
 
 
 class TextChunkProcessor(BaseFileProcessor):
@@ -22,7 +22,7 @@ class TextChunkProcessor(BaseFileProcessor):
 
     def _get_default_strategy(self) -> ChunkingStrategy:
         ext = os.path.splitext(self.file_path)[1].lower()
-        return ChunkingStrategy.DEFAULT_STRATEGIES.get(ext, FixedSizeChunking(chunk_size=500, overlap=50))
+        return ChunkingStrategy.DEFAULT_STRATEGIES.get(ext, SlidingWindowChunking(chunk_size=500, overlap=50))
 
     def get_text(self) -> List[str]:
         self._parsed_content = self._extract_content()
