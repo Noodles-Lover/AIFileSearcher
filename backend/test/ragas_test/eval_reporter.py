@@ -16,13 +16,16 @@ class EvalReporter:
         self.result_dir = result_dir
         os.makedirs(result_dir, exist_ok=True)
 
-    def _get_next_seq(self, base_name: str) -> str:
-        """获取下一个序号"""
+    def _get_next_seq(self, base_name: str) -> int:
+        """获取下一个序号（只检查 json 文件）"""
         existing = []
         for f in os.listdir(self.result_dir):
-            if f.startswith(base_name) and f.endswith(".json"):
+            if f.startswith(base_name):
+                # 匹配 base_name-X.json 或 base_name-X.txt
                 try:
-                    seq = int(f.split("-")[-1].replace(".json", ""))
+                    # 去掉前缀和后缀，获取序号
+                    rest = f[len(base_name)+1:]
+                    seq = int(rest.replace(".json", "").replace(".txt", ""))
                     existing.append(seq)
                 except ValueError:
                     continue
@@ -31,7 +34,7 @@ class EvalReporter:
         if existing:
             next_seq = max(existing) + 1
         
-        return f"{base_name}-{next_seq}.json"
+        return next_seq
 
     def export(self, 
                test_type: str,
@@ -40,15 +43,16 @@ class EvalReporter:
                chunking_name: str,
                metrics: dict,
                performance: dict,
-               config: dict = None) -> str:
+               config: dict = None) -> tuple:
         """
         导出评估结果到 JSON 文件
         
         Returns:
-            str: 导出文件的完整路径
+            tuple: (filepath, seq) 导出文件的完整路径和序号
         """
         base_name = f"{test_type}-{embedding_model}-{index_type}-{chunking_name}"
-        filename = self._get_next_seq(base_name)
+        seq = self._get_next_seq(base_name)
+        filename = f"{base_name}-{seq}.json"
         filepath = os.path.join(self.result_dir, filename)
 
         result = {
@@ -67,7 +71,7 @@ class EvalReporter:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
-        return filepath
+        return filepath, seq
 
     def export_text(self,
                     test_type: str,
@@ -76,6 +80,7 @@ class EvalReporter:
                     chunking_name: str,
                     metrics: dict,
                     performance: dict,
+                    seq: int = None,
                     query_results: list = None) -> str:
         """
         导出评估结果到文本文件
@@ -84,7 +89,9 @@ class EvalReporter:
             str: 导出文件的完整路径
         """
         base_name = f"{test_type}-{embedding_model}-{index_type}-{chunking_name}"
-        filename = self._get_next_seq(base_name).replace(".json", ".txt")
+        if seq is None:
+            seq = self._get_next_seq(base_name)
+        filename = f"{base_name}-{seq}.txt"
         filepath = os.path.join(self.result_dir, filename)
 
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -122,7 +129,7 @@ class EvalReporter:
             f.write(f"  Files Processed: {perf_stats.get('file_count', 0)}\n")
             f.write(f"  Total Chunks: {perf_stats.get('total_chunks', 0)}\n")
             f.write(f"  Index Vectors: {perf_stats.get('vector_count', 0)}\n")
-            f.write(f"  Index Size: {perf_stats.get('index_size', 'N/A')}\n")
+            f.write(f"  Index Size: {perf_meta.get('index_size', 'N/A')}\n")
             
             f.write(f"\n【Time Stats】\n")
             f.write(f"  Total Chunking Time: {perf_stats.get('chunk_time', 0):.3f}s\n")

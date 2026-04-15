@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 TEST_CASES_FILE = None  # 动态设置
 
 # 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "txt"
+CURRENT_TEST_TYPE = "md"
 
 # ============ 性能测试参数 ============
 
@@ -20,7 +20,7 @@ EMBEDDING_MODEL = "bge-m3"
 EMBEDDING_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "embedding", EMBEDDING_MODEL)
 
 # 索引类型：IndexFlatL2, IndexFlatIP, IndexIVFFlat, IndexHNSWFlat
-INDEX_TYPE = "IndexFlatL2"
+INDEX_TYPE = "IndexIVFFlat"
 
 # 分块策略（直接指定策略类）
 # 可选：FixedSizeChunking, ParagraphChunking, SentenceChunking

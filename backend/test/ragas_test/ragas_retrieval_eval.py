@@ -524,7 +524,7 @@ def main():
     
     # Step 7: 导出结果
     reporter = EvalReporter()
-    json_path = reporter.export(
+    json_path, seq = reporter.export(
         test_type=CURRENT_TEST_TYPE,
         embedding_model=EMBEDDING_MODEL,
         index_type=INDEX_TYPE,
@@ -539,7 +539,8 @@ def main():
         index_type=INDEX_TYPE,
         chunking_name=get_chunking_name(),
         metrics=metrics,
-        performance=performance
+        performance=performance,
+        seq=seq
     )
     
     print(f"\n[Export] Results saved to:")
