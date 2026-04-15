@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 TEST_CASES_FILE = None  # 动态设置
 
 # 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "txt"
+CURRENT_TEST_TYPE = "md"
 
 # ============ 性能测试参数 ============
 

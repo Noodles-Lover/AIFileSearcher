@@ -5,26 +5,38 @@
       {"query": "查找健康相关的文件", "expected_category": "健康医疗"},
       {"query": "有没有体检的资料", "expected_category": "健康医疗"},
       {"query": "个人健康记录", "expected_category": "健康医疗"},
+      {"query": "体检报告在哪里", "expected_category": "健康医疗"},
+      {"query": "医院检查结果", "expected_category": "健康医疗"},
 
       {"query": "工作之余的娱乐内容", "expected_category": "娱乐休闲"},
       {"query": "休闲放松的资料", "expected_category": "娱乐休闲"},
       {"query": "电影相关", "expected_category": "娱乐休闲"},
+      {"query": "最近看了什么电影", "expected_category": "娱乐休闲"},
+      {"query": "想听音乐", "expected_category": "娱乐休闲"},
 
       {"query": "需要整理的学习资料", "expected_category": "学习资料"},
       {"query": "复习用的笔记", "expected_category": "学习资料"},
       {"query": "历史知识", "expected_category": "学习资料"},
+      {"query": "考试复习内容", "expected_category": "学习资料"},
+      {"query": "课程笔记", "expected_category": "学习资料"},
 
       {"query": "办公需要的文档", "expected_category": "工作文档"},
       {"query": "项目相关资料", "expected_category": "工作文档"},
       {"query": "会议纪要", "expected_category": "工作文档"},
+      {"query": "工作总结报告", "expected_category": "工作文档"},
+      {"query": "工作计划", "expected_category": "工作文档"},
 
       {"query": "日常生活记录", "expected_category": "生活记录"},
       {"query": "之前去过的地方", "expected_category": "生活记录"},
       {"query": "购物清单", "expected_category": "生活记录"},
+      {"query": "旅游日记", "expected_category": "生活记录"},
+      {"query": "美食记录", "expected_category": "生活记录"},
 
       {"query": "钱相关的文件", "expected_category": "财务管理"},
       {"query": "存钱计划", "expected_category": "财务管理"},
-      {"query": "投资", "expected_category": "财务管理"}
+      {"query": "投资", "expected_category": "财务管理"},
+      {"query": "预算记录", "expected_category": "财务管理"},
+      {"query": "支出明细", "expected_category": "财务管理"}
     ]
   },
   "md": {
@@ -33,22 +45,32 @@
       {"query": "开会的内容记录", "expected_category": "会议纪要"},
       {"query": "团队讨论了什么", "expected_category": "会议纪要"},
       {"query": "Sprint评审", "expected_category": "会议纪要"},
+      {"query": "周会讨论事项", "expected_category": "会议纪要"},
+      {"query": "头脑风暴记录", "expected_category": "会议纪要"},
 
       {"query": "写的文章或故事", "expected_category": "创意写作"},
       {"query": "文学创作", "expected_category": "创意写作"},
       {"query": "小说散文", "expected_category": "创意写作"},
+      {"query": "诗歌作品", "expected_category": "创意写作"},
+      {"query": "短篇故事", "expected_category": "创意写作"},
 
       {"query": "数据分析报告", "expected_category": "报告分析"},
       {"query": "运营相关", "expected_category": "报告分析"},
       {"query": "财务报告", "expected_category": "报告分析"},
+      {"query": "季度总结", "expected_category": "报告分析"},
+      {"query": "用户增长分析", "expected_category": "报告分析"},
 
       {"query": "编程学习笔记", "expected_category": "知识笔记"},
       {"query": "技术教程", "expected_category": "知识笔记"},
       {"query": "Git教程", "expected_category": "知识笔记"},
+      {"query": "Python学习", "expected_category": "知识笔记"},
+      {"query": "框架使用指南", "expected_category": "知识笔记"},
 
       {"query": "软件开发需求", "expected_category": "需求文档"},
       {"query": "APP功能设计", "expected_category": "需求文档"},
-      {"query": "登录系统需求", "expected_category": "需求文档"}
+      {"query": "登录系统需求", "expected_category": "需求文档"},
+      {"query": "用户故事", "expected_category": "需求文档"},
+      {"query": "产品需求文档", "expected_category": "需求文档"}
     ]
   }
 }

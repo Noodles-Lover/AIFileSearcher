@@ -13,13 +13,19 @@ class EvalReporter:
             backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             result_dir = os.path.join(backend_dir, "test", "ragas_test", "result")
         
-        self.result_dir = result_dir
+        self.base_result_dir = result_dir
         os.makedirs(result_dir, exist_ok=True)
 
-    def _get_next_seq(self, base_name: str) -> int:
-        """获取下一个序号（只检查 json 文件）"""
+    def _get_type_dir(self, test_type: str) -> str:
+        """获取指定类型的子目录"""
+        type_dir = os.path.join(self.base_result_dir, test_type)
+        os.makedirs(type_dir, exist_ok=True)
+        return type_dir
+
+    def _get_next_seq(self, base_name: str, type_dir: str) -> int:
+        """获取下一个序号（检查指定类型目录）"""
         existing = []
-        for f in os.listdir(self.result_dir):
+        for f in os.listdir(type_dir):
             if f.startswith(base_name):
                 # 匹配 base_name-X.json 或 base_name-X.txt
                 try:
@@ -50,10 +56,11 @@ class EvalReporter:
         Returns:
             tuple: (filepath, seq) 导出文件的完整路径和序号
         """
-        base_name = f"{test_type}-{embedding_model}-{index_type}-{chunking_name}"
-        seq = self._get_next_seq(base_name)
+        type_dir = self._get_type_dir(test_type)
+        base_name = f"{embedding_model}-{index_type}-{chunking_name}"
+        seq = self._get_next_seq(base_name, type_dir)
         filename = f"{base_name}-{seq}.json"
-        filepath = os.path.join(self.result_dir, filename)
+        filepath = os.path.join(type_dir, filename)
 
         result = {
             "meta": {
@@ -88,11 +95,12 @@ class EvalReporter:
         Returns:
             str: 导出文件的完整路径
         """
-        base_name = f"{test_type}-{embedding_model}-{index_type}-{chunking_name}"
+        type_dir = self._get_type_dir(test_type)
+        base_name = f"{embedding_model}-{index_type}-{chunking_name}"
         if seq is None:
-            seq = self._get_next_seq(base_name)
+            seq = self._get_next_seq(base_name, type_dir)
         filename = f"{base_name}-{seq}.txt"
-        filepath = os.path.join(self.result_dir, filename)
+        filepath = os.path.join(type_dir, filename)
 
         memory = performance.get('memory', {})
         perf_stats = performance.get('stats', {})
