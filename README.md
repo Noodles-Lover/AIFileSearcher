@@ -4,7 +4,6 @@
 
 ## 🌟 主要功能
 
-- **文件名搜索**：基于 Everything 引擎的快速文件名搜索
 - **语义搜索**：使用向量嵌入模型进行智能内容搜索
 - **多格式支持**：支持 PDF、DOCX、PPTX、TXT、MD、图片、二进制文件等
 - **实时进度反馈**：建立索引时提供实时进度显示（SSE流式输出）
@@ -177,9 +176,11 @@ python gui/main.py
 
 ## 📚 文档
 
+- **[后端开发指南](backend/DEVELOPMENT.md)** - Python 后端开发说明
 - **[RAG 模块文档](backend/RAG/DEVELOPMENT.md)** - RAG 核心模块详细说明
 - **[文件处理文档](backend/process/ProcessDocs.md)** - 文件处理模块详细说明
 - **[测试脚本说明](backend/test/TESTSCRIPTS.md)** - 测试脚本使用说明
+- **[检索评估指南](backend/test/ragas_test/EVAL_GUIDE.md)** - RAG 检索评估说明
 
 ## 🐛 故障排除
 
