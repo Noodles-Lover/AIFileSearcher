@@ -1,0 +1,44 @@
+"""评估测试配置"""
+import os
+
+# 项目根目录（自动计算）
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
+
+# 测试用例 JSON 文件路径
+TEST_CASES_FILE = None  # 动态设置
+
+# 当前测试类型: "txt" 或 "md"
+CURRENT_TEST_TYPE = "txt"
+
+# ============ 性能测试参数 ============
+
+# 嵌入模型名称（必须与 models/embedding/ 下的目录名一致）
+EMBEDDING_MODEL = "bge-m3"
+
+# 嵌入模型路径（自动生成）
+EMBEDDING_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "embedding", EMBEDDING_MODEL)
+
+# 索引类型：IndexFlatL2, IndexFlatIP, IndexIVFFlat, IndexHNSWFlat
+INDEX_TYPE = "IndexFlatL2"
+
+# 分块策略（直接指定策略类）
+# 可选：FixedSizeChunking, ParagraphChunking, SentenceChunking
+# 如需自定义参数，可直接实例化，如：
+# CHUNKING_STRATEGY = FixedSizeChunking(chunk_size=500, overlap=50)
+CHUNKING_STRATEGY = None  # None 表示使用各文件类型的默认策略
+
+# ============ 其他配置 ============
+
+# 是否启用 LLM 重写查询
+ENABLE_QUERY_REWRITE = True
+
+# LLM 类型: "deepseek" (API) 或 "local" (本地模型)
+LLM_TYPE = "deepseek"
+
+
+def get_chunking_name():
+    """获取分块策略名称"""
+    if CHUNKING_STRATEGY is None:
+        return "Default"
+    return CHUNKING_STRATEGY.__class__.__name__

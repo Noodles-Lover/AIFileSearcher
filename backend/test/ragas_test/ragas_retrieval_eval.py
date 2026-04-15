@@ -1,16 +1,9 @@
-"""
-RAG 检索评估脚本 - 集成 RAGAS 指标
+"""RAG 检索评估脚本主流程"""
 
-支持：
-- 从 JSON 文件加载测试用例
-- 灵活配置测试文件类型（txt, md）
-- 本地 LLM 模型（Qwen2.5-3B-Instruct）
-- LLM 查询重写
-- 多种评估指标
-"""
 import sys
 import os
 import json
+import time
 
 # 添加项目根目录到 path
 backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,45 +16,82 @@ ensure_project_path()
 
 from backend.RAG.EmbeddingModel import EmbeddingModel
 from backend.RAG.VectorStore import VectorStore
+from backend.process.FileProcessor import FileProcessor
 from backend.utils.IndexedFoldersManager import folders_manager
 from backend.utils.search_utils import rewrite_query_with_llm
 import numpy as np
-import time
 
-# ============================================================
-# 配置区域
-# ============================================================
+# 导入配置和工具
+from eval_config import (
+    CURRENT_TEST_TYPE, EMBEDDING_MODEL, EMBEDDING_MODEL_PATH, INDEX_TYPE, 
+    CHUNKING_STRATEGY, ENABLE_QUERY_REWRITE, LLM_TYPE, PROJECT_ROOT,
+    get_chunking_name
+)
+from eval_reporter import EvalReporter
 
-# 测试用例 JSON 文件路径
-TEST_CASES_FILE = os.path.join(backend_dir, "test", "ragas_test", "test_cases.json")
+# 设置测试用例文件路径
+from eval_config import TEST_CASES_FILE as _orig_tcf
+if _orig_tcf is None:
+    TEST_CASES_FILE = os.path.join(backend_dir, "test", "ragas_test", "test_cases.json")
+else:
+    TEST_CASES_FILE = _orig_tcf
 
-# 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "txt"
-
-# LLM 配置（使用本地模型）
-LOCAL_LLM_PATH = os.path.join(project_root, "models", "LLM", "Qwen2.5-3B-Instruct")
-
-# 是否启用 LLM 重写查询
-ENABLE_QUERY_REWRITE = True
-
-# LLM 类型: "deepseek" (API) 或 "local" (本地模型)
-LLM_TYPE = "deepseek"  # 默认使用 DeepSeek API（速度快，质量好）
+# 内存监控
+import tracemalloc
 
 
-# ============================================================
-# 加载测试用例
-# ============================================================
+def get_model_folder_size(model_path: str) -> int:
+    """计算模型文件夹总大小（字节）"""
+    total_size = 0
+    if os.path.exists(model_path):
+        for dirpath, dirnames, filenames in os.walk(model_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if os.path.exists(fp):
+                    total_size += os.path.getsize(fp)
+    return total_size
 
-def load_test_cases(test_type: str) -> dict:
-    """从 JSON 文件加载指定类型的测试用例"""
-    with open(TEST_CASES_FILE, 'r', encoding='utf-8') as f:
-        all_cases = json.load(f)
-    return all_cases[test_type]
+
+def get_memory_usage_mb() -> float:
+    """获取当前进程内存占用（MB）"""
+    current, _ = tracemalloc.get_traced_memory()
+    return current / (1024 * 1024)
+
+
+def snapshot_memory() -> dict:
+    """获取内存快照"""
+    current, peak = tracemalloc.get_traced_memory()
+    return {
+        "current_mb": round(current / (1024 * 1024), 2),
+        "peak_mb": round(peak / (1024 * 1024), 2)
+    }
 
 
 # ============================================================
 # 辅助函数
 # ============================================================
+
+def format_size(size_bytes: int) -> str:
+    """格式化文件大小"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.2f} TB"
+
+
+def get_index_size() -> int:
+    """获取索引文件夹的总大小（字节）"""
+    data_path = get_data_path("")
+    total_size = 0
+    
+    for filename in ["faiss_index.bin", "metadata.json", "file_cache.json", "faiss_index.info"]:
+        filepath = os.path.join(data_path, filename)
+        if os.path.exists(filepath):
+            total_size += os.path.getsize(filepath)
+    
+    return total_size
+
 
 def clear_index_files():
     """清空索引文件"""
@@ -88,23 +118,36 @@ def clear_index_files():
 
 
 def setup_index():
-    """初始化索引（直接加载 EmbeddingModel，不触发 SystemManager 自动加载 LLM）"""
+    """初始化索引"""
     clear_index_files()
     time.sleep(0.5)
     
-    # 直接初始化 EmbeddingModel，避免 SystemManager 自动加载 LLM
-    print("📊 Loading embedding model: bge-m3...")
-    embedder = EmbeddingModel(model_name="bge-m3")
-    dimension = embedder.model.get_sentence_embedding_dimension()
-    print("✅ Embedding model loaded")
+    print("\n" + "=" * 60)
+    print("Loading embedding model...")
+    print("=" * 60)
     
+    model_load_start = time.time()
+    embedder = EmbeddingModel(model_name=EMBEDDING_MODEL)
+    model_load_time = time.time() - model_load_start
+    
+    dimension = embedder.model.get_sentence_embedding_dimension()
+    
+    print(f"\n✅ Embedding model loaded")
+    print(f"   Model: {EMBEDDING_MODEL}")
+    print(f"   Dimension: {dimension}")
+    print(f"   Load time: {model_load_time:.2f}s")
+    
+    print(f"\n📊 Creating index: {INDEX_TYPE}")
     store = VectorStore(
         dimension=dimension,
         index_path=get_data_path("faiss_index.bin"),
-        metadata_path=get_data_path("metadata.json")
+        metadata_path=get_data_path("metadata.json"),
+        index_type=INDEX_TYPE
     )
     
-    return embedder, store
+    print(f"   Index type: {type(store.index).__name__}")
+    
+    return embedder, store, model_load_time
 
 
 def get_files_from_config(test_path: str, test_type: str) -> list:
@@ -117,100 +160,110 @@ def get_files_from_config(test_path: str, test_type: str) -> list:
     return files
 
 
-def index_files(store, file_list, embedder):
-    """索引文件"""
-    vectors = []
-    metadata = []
+def index_files_with_timing(store, file_list, embedder, processor):
+    """索引文件（带性能计时）"""
+    all_metadata = []
+    total_chunk_time = 0
+    total_vector_time = 0
+    total_chunks = 0
+    per_file_stats = []
     
-    for file_path in file_list:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+    for i, file_path in enumerate(file_list):
+        file_name = os.path.basename(file_path)
         
-        vector = embedder.encode([content])[0]
-        vectors.append(vector)
+        # 分块阶段
+        chunk_start = time.time()
+        result = processor.process_file(file_path)
+        chunk_end = time.time()
+        chunk_time = chunk_end - chunk_start
         
-        filename = os.path.basename(file_path)
-        category = extract_category(filename)
+        if "error" in result:
+            print(f"  [{i+1}/{len(file_list)}] {file_name}: {result['error']}")
+            continue
         
-        metadata.append({
-            "file_path": file_path,
-            "file_name": filename,
-            "content": content,
-            "category": category
+        chunks = result.get("chunks", [])
+        if not chunks:
+            print(f"  [{i+1}/{len(file_list)}] {file_name}: No content")
+            continue
+        
+        # 向量化阶段
+        vector_start = time.time()
+        embeddings = embedder.encode(chunks)
+        vector_end = time.time()
+        vector_time = vector_end - vector_start
+        
+        # 添加到索引
+        metas = []
+        for j, chunk in enumerate(chunks):
+            metadata = {
+                "file_path": file_path,
+                "file_name": file_name,
+                "content": chunk,
+                "category": extract_category(file_name),
+                "chunk_index": j,
+                "chunk_text": chunk[:100] if len(chunk) > 100 else chunk
+            }
+            metas.append(metadata)
+        
+        store.add(np.array(embeddings).astype('float32'), metas)
+        
+        all_metadata.extend(metas)
+        total_chunk_time += chunk_time
+        total_vector_time += vector_time
+        total_chunks += len(chunks)
+        
+        per_file_stats.append({
+            "file_name": file_name,
+            "chunks": len(chunks),
+            "chunk_time_ms": chunk_time * 1000,
+            "vector_time_ms": vector_time * 1000
         })
+        
+        print(f"  [{i+1}/{len(file_list)}] {file_name}: {len(chunks)} chunks, "
+              f"chunk {chunk_time*1000:.1f}ms, vector {vector_time*1000:.1f}ms")
     
-    vectors_array = np.array(vectors).astype('float32')
-    store.add(vectors_array, metadata)
-    
-    return metadata
+    return {
+        "metadata": len(all_metadata),
+        "chunk_time": total_chunk_time,
+        "vector_time": total_vector_time,
+        "total_chunks": total_chunks,
+        "per_file_stats": per_file_stats
+    }
 
 
 def extract_category(filename):
-    """
-    从文件名提取分类
-    
-    规则（按优先级）：
-    1. 下划线 "_" 前的内容
-    2. 中横线 "-" 前的内容（当下划线不存在时）
-    3. 全文件名（当都没有时）
-    
-    示例：
-      "健康医疗_体检报告.txt" -> "健康医疗"
-      "会议纪要_Sprint评审.md" -> "会议纪要"
-      "Git教程.md" -> "Git教程"
-    """
-    # 优先使用下划线
+    """从文件名提取分类"""
     if '_' in filename:
         return filename.split('_')[0]
-    # 其次使用中横线
     if '-' in filename:
         return filename.split('-')[0]
-    # 否则使用文件名（去除扩展名）
     return os.path.splitext(filename)[0]
-
-
-def rewrite_query(query: str, use_deepseek: bool = True) -> str:
-    """使用 LLM 重写查询"""
-    return rewrite_query_with_llm(query, use_deepseek=use_deepseek)
 
 
 def evaluate_retrieval(store, embedder, query: str, expected_category: str, 
                        use_rewrite: bool = True) -> dict:
-    """
-    评估单次检索
-    
-    Returns:
-        dict: {
-            "original_query": str,
-            "rewritten_query": str or None,
-            "results": list,
-            "hit": bool,
-            "precision_at_1": float,
-            "precision_at_3": float,
-            "category_hits": dict
-        }
-    """
-    # LLM 重写（可选）
+    """评估单次检索"""
     rewritten = None
     search_query = query
     if use_rewrite:
         use_deepseek = (LLM_TYPE == "deepseek")
-        rewritten = rewrite_query(query, use_deepseek=use_deepseek)
+        rewritten = rewrite_query_with_llm(query, use_deepseek=use_deepseek)
         search_query = rewritten
     
     # 向量化查询
+    encode_start = time.time()
     query_vector = embedder.encode([search_query])[0]
+    encode_time = time.time() - encode_start
     
     # 检索
+    search_start = time.time()
     results = store.search(query_vector, k=5)
+    search_time = time.time() - search_start
     
-    # 检查前1/3个结果中是否有期望分类的文件
     top_1 = results[:1]
     top_3 = results[:3]
     
     p_at_1 = 0.0
-    p_at_3 = 0.0
-    
     for r in top_1:
         if r.get('category') == expected_category:
             p_at_1 = 1.0
@@ -229,10 +282,10 @@ def evaluate_retrieval(store, embedder, query: str, expected_category: str,
         "hit": p_at_1 > 0 or p_at_3 > 0,
         "precision_at_1": p_at_1,
         "precision_at_3": p_at_3,
-        "category_hits": {
-            "top1": p_at_1 > 0,
-            "top3": hit_count
-        }
+        "category_hits": {"top1": p_at_1 > 0, "top3": hit_count},
+        "encode_time": encode_time,
+        "search_time": search_time,
+        "total_time": encode_time + search_time
     }
 
 
@@ -262,40 +315,114 @@ def calculate_metrics(all_results: list) -> dict:
     p_at_1 = [r['precision_at_1'] for r in all_results]
     p_at_3 = [r['precision_at_3'] for r in all_results]
     
-    # MRR (Mean Reciprocal Rank)
     mrr = 0.0
     for r in all_results:
-        # 找到第一个命中的位置
         for i, res in enumerate(r['results']):
             if res.get('category') == r.get('expected_category'):
                 mrr += 1.0 / (i + 1)
                 break
     
-    # Hit Rate@3
     hit_at_3 = sum(1 for r in all_results if r['category_hits']['top3'] > 0)
+    total_encode_time = sum(r['encode_time'] for r in all_results)
+    total_search_time = sum(r['search_time'] for r in all_results)
     
     return {
-        "precision_at_1": np.mean(p_at_1),
-        "precision_at_3": np.mean(p_at_3),
-        "mrr": mrr / n if n > 0 else 0.0,
-        "hit_rate_at_3": hit_at_3 / n if n > 0 else 0.0,
+        "precision_at_1": float(np.mean(p_at_1)),
+        "precision_at_3": float(np.mean(p_at_3)),
+        "mrr": float(mrr / n if n > 0 else 0.0),
+        "hit_rate_at_3": float(hit_at_3 / n if n > 0 else 0.0),
         "total": n,
-        "hits": sum(1 for r in all_results if r['hit'])
+        "hits": sum(1 for r in all_results if r['hit']),
+        "avg_encode_time": float(total_encode_time / n if n > 0 else 0),
+        "avg_search_time": float(total_search_time / n if n > 0 else 0),
+        "avg_total_time": float((total_encode_time + total_search_time) / n if n > 0 else 0)
     }
 
 
 def print_metrics(metrics: dict):
     """打印评估指标"""
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("EVALUATION METRICS")
-    print("=" * 50)
+    print("=" * 60)
     print(f"Total queries:       {metrics['total']}")
     print(f"Hits (top-3):        {metrics['hits']}/{metrics['total']}")
     print(f"Precision@1:        {metrics['precision_at_1']:.4f}")
     print(f"Precision@3:        {metrics['precision_at_3']:.4f}")
     print(f"MRR:                {metrics['mrr']:.4f}")
     print(f"Hit Rate@3:         {metrics['hit_rate_at_3']:.4f}")
-    print("=" * 50)
+    print("=" * 60)
+
+
+def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict = None):
+    """打印性能统计"""
+    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    
+    print("\n" + "=" * 60)
+    print("PERFORMANCE STATISTICS")
+    print("=" * 60)
+    
+    print(f"\n【Model Loading】")
+    print(f"  Embedding Model: {EMBEDDING_MODEL}")
+    print(f"  Model Size: {format_size(model_size)}")
+    print(f"  Load Time: {model_load_time:.2f}s")
+    if mem_stats:
+        print(f"  Memory After Load: {mem_stats['current_mb']} MB (peak: {mem_stats['peak_mb']} MB)")
+    
+    print(f"\n【Index Config】")
+    print(f"  Index Type: {INDEX_TYPE}")
+    print(f"  Chunking Strategy: {get_chunking_name()}")
+    
+    print(f"\n【Index Stats】")
+    print(f"  Files Processed: {len(stats['per_file_stats'])}")
+    print(f"  Total Chunks: {stats['total_chunks']}")
+    print(f"  Index Vectors: {stats['metadata']}")
+    print(f"  Index Size: {format_size(get_index_size())}")
+    
+    print(f"\n【Time Stats】")
+    print(f"  Total Chunking Time: {stats['chunk_time']:.3f}s ({stats['chunk_time']*1000:.1f}ms)")
+    print(f"  Total Vectorization Time: {stats['vector_time']:.3f}s ({stats['vector_time']*1000:.1f}ms)")
+    
+    if len(stats['per_file_stats']) > 0:
+        print(f"\n【Average Times】")
+        print(f"  Per File Chunking: {stats['chunk_time']/len(stats['per_file_stats'])*1000:.1f}ms")
+        print(f"  Per File Vectorization: {stats['vector_time']/len(stats['per_file_stats'])*1000:.1f}ms")
+    
+    if stats['total_chunks'] > 0:
+        print(f"  Per Chunk Vectorization: {stats['vector_time']/stats['total_chunks']*1000:.2f}ms")
+    
+    print("=" * 60)
+
+
+def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict) -> dict:
+    """构建性能数据（用于导出）"""
+    file_count = len(stats['per_file_stats'])
+    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    
+    return {
+        "meta": {
+            "embedding_model": EMBEDDING_MODEL,
+            "model_path": EMBEDDING_MODEL_PATH,
+            "model_size": format_size(model_size),
+            "model_load_time": model_load_time,
+            "index_type": INDEX_TYPE,
+            "chunking_strategy": get_chunking_name(),
+            "index_size": format_size(get_index_size())
+        },
+        "memory": {
+            "after_load_mb": mem_after_load['current_mb'],
+            "peak_mb": mem_after_load['peak_mb']
+        },
+        "stats": {
+            "file_count": file_count,
+            "total_chunks": stats['total_chunks'],
+            "vector_count": stats['metadata'],
+            "chunk_time": stats['chunk_time'],
+            "vector_time": stats['vector_time'],
+            "avg_chunk_per_file": stats['chunk_time'] / file_count * 1000 if file_count > 0 else 0,
+            "avg_vector_per_file": stats['vector_time'] / file_count * 1000 if file_count > 0 else 0,
+            "avg_vector_per_chunk": stats['vector_time'] / stats['total_chunks'] * 1000 if stats['total_chunks'] > 0 else 0
+        }
+    }
 
 
 # ============================================================
@@ -303,21 +430,28 @@ def print_metrics(metrics: dict):
 # ============================================================
 
 def main():
+    # 启动内存追踪
+    tracemalloc.start()
+    
     print("=" * 60)
     print("AIFileSearcher Retrieval Evaluation")
     print("=" * 60)
     
-    # 加载测试用例
-    print(f"\n[Config] Loading test cases from: {TEST_CASES_FILE}")
-    print(f"[Config] Test type: {CURRENT_TEST_TYPE}")
-    print(f"[Config] LLM Rewrite: {'Enabled' if ENABLE_QUERY_REWRITE else 'Disabled'}")
-    print(f"[Config] LLM Type: {LLM_TYPE}")
+    print(f"\n【Configuration】")
+    print(f"  Embedding Model: {EMBEDDING_MODEL}")
+    print(f"  Index Type: {INDEX_TYPE}")
+    print(f"  Chunking Strategy: {get_chunking_name()}")
+    print(f"  LLM Rewrite: {'Enabled' if ENABLE_QUERY_REWRITE else 'Disabled'}")
+    print(f"  LLM Type: {LLM_TYPE}")
+    print(f"  Test Type: {CURRENT_TEST_TYPE}")
     
-    test_cases = load_test_cases(CURRENT_TEST_TYPE)
+    # 加载测试用例
+    with open(TEST_CASES_FILE, 'r', encoding='utf-8') as f:
+        test_cases = json.load(f)[CURRENT_TEST_TYPE]
     test_queries = test_cases["queries"]
     test_path = test_cases["path"]
     
-    print(f"[Config] Test path: {test_path}")
+    print(f"\n[Config] Test path: {test_path}")
     print(f"[Config] Queries: {len(test_queries)}")
     
     # Step 1: 清空索引
@@ -327,15 +461,35 @@ def main():
     
     # Step 2: 初始化索引
     print("\n[Step 2] Initializing index...")
-    embedder, store = setup_index()
+    embedder, store, model_load_time = setup_index()
+    mem_after_load = snapshot_memory()
+    
+    # 打印模型信息
+    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    print(f"   Model size: {format_size(model_size)}")
+    print(f"   Memory after load: {mem_after_load['current_mb']} MB (peak: {mem_after_load['peak_mb']} MB)")
+    
+    # 创建文件处理器
+    processor = FileProcessor()
+    if CHUNKING_STRATEGY:
+        processor.chunking_strategy = CHUNKING_STRATEGY
     
     # Step 3: 索引测试文件
     print("\n[Step 3] Indexing test files...")
     files = get_files_from_config(test_path, CURRENT_TEST_TYPE)
-    print(f"[Step 3] Found {len(files)} files")
+    print(f"[Step 3] Found {len(files)} files\n")
     
-    metadata = index_files(store, files, embedder)
-    print(f"[Step 3] Indexed {len(metadata)} files")
+    index_start = time.time()
+    index_stats = index_files_with_timing(store, files, embedder, processor)
+    index_time = time.time() - index_start
+    
+    # 保存索引
+    save_start = time.time()
+    store.save()
+    save_time = time.time() - save_start
+    
+    print(f"\n[Step 3] Indexed {index_stats['metadata']} chunks in {index_time:.2f}s")
+    print(f"[Step 3] Save time: {save_time:.2f}s")
     
     # Step 4: 评估检索
     print(f"\n[Step 4] Evaluating retrieval...")
@@ -358,10 +512,39 @@ def main():
         all_results.append(result)
         
         print_result(result, i + 1)
+        print(f"      [Time: encode {result['encode_time']*1000:.1f}ms, search {result['search_time']*1000:.1f}ms]")
     
     # Step 5: 计算并打印指标
     metrics = calculate_metrics(all_results)
     print_metrics(metrics)
+    
+    # Step 6: 打印性能统计
+    performance = build_performance_data(index_stats, model_load_time, mem_after_load)
+    print_performance_stats(index_stats, model_load_time, mem_after_load)
+    
+    # Step 7: 导出结果
+    reporter = EvalReporter()
+    json_path = reporter.export(
+        test_type=CURRENT_TEST_TYPE,
+        embedding_model=EMBEDDING_MODEL,
+        index_type=INDEX_TYPE,
+        chunking_name=get_chunking_name(),
+        metrics=metrics,
+        performance=performance
+    )
+    
+    txt_path = reporter.export_text(
+        test_type=CURRENT_TEST_TYPE,
+        embedding_model=EMBEDDING_MODEL,
+        index_type=INDEX_TYPE,
+        chunking_name=get_chunking_name(),
+        metrics=metrics,
+        performance=performance
+    )
+    
+    print(f"\n[Export] Results saved to:")
+    print(f"  JSON: {json_path}")
+    print(f"  TXT:  {txt_path}")
     
     print("\n[Done] Evaluation complete!")
 
