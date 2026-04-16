@@ -219,12 +219,16 @@ class ParagraphChunking(ChunkingStrategy):
         return f"Paragraph(lines={self.lines_per_para})"
 
 
+# 需要导入语义分块策略
+from .MDSemanticChunking import MDSemanticChunking
+from .SlideChunking import SlideChunking
+
 ChunkingStrategy.DEFAULT_STRATEGIES = {
-    '.md': ParagraphChunking(),
+    '.md': MDSemanticChunking(),           # 按标题层级语义分块
     '.txt': SlidingWindowChunking(chunk_size=1000, overlap=100, min_chunk_size=100),
     '.pdf': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
     '.docx': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
     '.doc': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
-    '.pptx': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
-    '.ppt': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
+    '.pptx': SlideChunking(),             # 按幻灯片分块
+    '.ppt': SlideChunking(),               # 按幻灯片分块
 }

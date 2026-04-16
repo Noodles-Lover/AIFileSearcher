@@ -70,7 +70,13 @@
       {"query": "APP功能设计", "expected_category": "需求文档"},
       {"query": "登录系统需求", "expected_category": "需求文档"},
       {"query": "用户故事", "expected_category": "需求文档"},
-      {"query": "产品需求文档", "expected_category": "需求文档"}
+      {"query": "产品需求文档", "expected_category": "需求文档"},
+
+      {"query": "找工作用的简历", "expected_category": "人力资源"},
+      {"query": "员工入职要了解的东西", "expected_category": "人力资源"},
+      {"query": "公司招聘职位要求", "expected_category": "人力资源"},
+      {"query": "新员工培训资料", "expected_category": "人力资源"},
+      {"query": "绩效考核标准", "expected_category": "人力资源"},
     ]
   }
 }

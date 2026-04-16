@@ -6,6 +6,9 @@ from .DocParser import DocParser  # 同时处理 .doc 和 .docx
 from .PPTParser import PPTParser
 from .MDParser import MDParser
 from .ImageParser import ImageParser
+from .TablePreprocessor import TablePreprocessor
+from .MDSemanticChunking import MDSemanticChunking
+from .SlideChunking import SlideChunking
 
 __all__ = [
     "TextChunkProcessor",
@@ -20,4 +23,7 @@ __all__ = [
     "PPTParser",
     "MDParser",
     "ImageParser",
+    "TablePreprocessor",
+    "MDSemanticChunking",
+    "SlideChunking",
 ]

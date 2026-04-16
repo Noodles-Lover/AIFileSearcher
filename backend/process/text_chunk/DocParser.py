@@ -10,6 +10,9 @@ class DocParser(TextChunkProcessor):
     解析方案优先级：
     - .docx: python-docx (轻量、跨平台)
     - .doc:   doc2txt (轻量) -> win32com (需Office) -> textract (需系统依赖)
+    
+    特性：
+    - 提取表格内容并转换为 Markdown 格式
     """
     type = 'doc'
 
@@ -38,13 +41,58 @@ class DocParser(TextChunkProcessor):
         return ""
 
     def _extract_with_docx(self) -> str:
-        """使用 python-docx 提取文本（仅支持 .docx）"""
+        """使用 python-docx 提取文本和表格（仅支持 .docx）"""
         try:
             doc = docx.Document(self.file_path)
-            full_text = [para.text for para in doc.paragraphs if para.text.strip()]
-            return '\n'.join(full_text)
+            content_parts = []
+
+            # 提取段落
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    content_parts.append(para.text.strip())
+
+            # 提取表格
+            tables = self._extract_tables(doc)
+            content_parts.extend(tables)
+
+            return '\n'.join(content_parts)
         except Exception:
             return ""
+
+    def _extract_tables(self, doc) -> list:
+        """提取 Word 文档中的所有表格，转换为 Markdown 格式"""
+        tables = []
+        
+        for table in doc.tables:
+            if not table.rows:
+                continue
+
+            # 收集表格数据
+            rows_data = []
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                rows_data.append(cells)
+
+            if not rows_data:
+                continue
+
+            # 转换为 Markdown 表格
+            table_lines = []
+            
+            # 表头
+            table_lines.append('| ' + ' | '.join(rows_data[0]) + ' |')
+            
+            # 分隔行
+            col_count = len(rows_data[0])
+            table_lines.append('| ' + ' | '.join(['---'] * col_count) + ' |')
+            
+            # 数据行
+            for row in rows_data[1:]:
+                table_lines.append('| ' + ' | '.join(row) + ' |')
+
+            tables.append('\n'.join(table_lines))
+
+        return tables
 
     def _extract_with_doc2txt(self) -> str:
         """使用 doc2txt 提取文本（轻量，纯 Python）"""
