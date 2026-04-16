@@ -39,7 +39,7 @@ class PDFParser(TextChunkProcessor):
             # 简单检测扫描件
             if self._page_count > 0:
                 avg_text_per_page = total_text_len / self._page_count
-                if avg_text_per_page < 100 and total_images >= self._page_count:
+                if avg_text_per_page < 50 and total_images >= self._page_count:
                     pdf_doc.close()
                     print(f"检测到扫描件 PDF: {self.file_path} (文本: {total_text_len} 字符, 图片: {total_images} 张)")
                     self._is_scanned_pdf = True

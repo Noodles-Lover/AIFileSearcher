@@ -68,10 +68,10 @@ class SlidingWindowChunking(ChunkingStrategy):
 
     def _find_break_point(self, text: str, start: int, end: int) -> int:
         """
-        从 end-1 向 start 方向查找最佳断点（限30字符内）
+        从 end-1 向 start 方向查找最佳断点（限50字符内）
         断点优先级：句末标点 > 换行 > 空格/逗号
         """
-        search_limit = min(30, end - start)
+        search_limit = min(50, end - start)
         search_start = end - search_limit
         
         # 优先找句末标点

@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 TEST_CASES_FILE = None  # 动态设置
 
 # 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "md"
+CURRENT_TEST_TYPE = "doc"
 
 # ============ 性能测试参数 ============
 
@@ -28,6 +28,8 @@ from backend.process.text_chunk.ChunkingStrategy import (
     ChunkingStrategy, SlidingWindowChunking, FixedSizeChunking, 
     ParagraphChunking, SentenceChunking
 )
+from backend.process.text_chunk.MDSemanticChunking import MDSemanticChunking
+from backend.process.text_chunk.SlideChunking import SlideChunking
 
 # 所有要测试的分块策略（遍历时会使用此列表）
 ALL_CHUNKING_STRATEGIES = [
@@ -35,6 +37,7 @@ ALL_CHUNKING_STRATEGIES = [
     FixedSizeChunking(chunk_size=500),
     SentenceChunking(max_chars=500),
     ParagraphChunking(lines_per_para=5, min_para_chars=50),
+    # MDSemanticChunking(max_chunk_size=1200, min_chunk_size=100, max_header_level=3),
 ]
 
 # 当前策略（用于单次测试，直接指定一个策略对象）

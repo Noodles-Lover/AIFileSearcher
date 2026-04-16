@@ -62,21 +62,129 @@
 
       {"query": "编程学习笔记", "expected_category": "知识笔记"},
       {"query": "技术教程", "expected_category": "知识笔记"},
+      {"query": "学习笔记", "expected_category": "知识笔记"},
       {"query": "Git教程", "expected_category": "知识笔记"},
-      {"query": "Python学习", "expected_category": "知识笔记"},
-      {"query": "框架使用指南", "expected_category": "知识笔记"},
+      {"query": "编程学习", "expected_category": "知识笔记"}
+    ]
+  },
+  "pdf": {
+    "path": "testFiles/pdf",
+    "queries": [
+      {"query": "法律相关", "expected_category": "法律"},
+      {"query": "法条法规", "expected_category": "法律"},
+      {"query": "民法典", "expected_category": "法律"},
+      {"query": "法律知识", "expected_category": "法律"},
+      {"query": "诉讼法", "expected_category": "法律"},
 
-      {"query": "软件开发需求", "expected_category": "需求文档"},
-      {"query": "APP功能设计", "expected_category": "需求文档"},
-      {"query": "登录系统需求", "expected_category": "需求文档"},
-      {"query": "用户故事", "expected_category": "需求文档"},
-      {"query": "产品需求文档", "expected_category": "需求文档"},
+      {"query": "高考物理", "expected_category": "高考物理"},
+      {"query": "物理试卷", "expected_category": "高考物理"},
+      {"query": "物理真题", "expected_category": "高考物理"},
+      {"query": "考试题", "expected_category": "高考物理"},
+      {"query": "物理考试", "expected_category": "高考物理"},
 
-      {"query": "找工作用的简历", "expected_category": "人力资源"},
-      {"query": "员工入职要了解的东西", "expected_category": "人力资源"},
-      {"query": "公司招聘职位要求", "expected_category": "人力资源"},
-      {"query": "新员工培训资料", "expected_category": "人力资源"},
-      {"query": "绩效考核标准", "expected_category": "人力资源"},
+      {"query": "合同协议", "expected_category": "合同"},
+      {"query": "合作协议", "expected_category": "合同"},
+      {"query": "租赁合同", "expected_category": "合同"},
+      {"query": "建筑合同", "expected_category": "合同"},
+      {"query": "商务合同", "expected_category": "合同"},
+
+      {"query": "计划书", "expected_category": "计划书"},
+      {"query": "创业计划", "expected_category": "计划书"},
+      {"query": "项目计划", "expected_category": "计划书"},
+      {"query": "商业计划", "expected_category": "计划书"},
+      {"query": "创新项目", "expected_category": "计划书"},
+
+      {"query": "学校通知", "expected_category": "学校通知"},
+      {"query": "学校规定", "expected_category": "学校通知"},
+      {"query": "选课制度", "expected_category": "学校通知"},
+      {"query": "学籍管理", "expected_category": "学校通知"},
+      {"query": "转专业", "expected_category": "学校通知"},
+
+      {"query": "教育文献", "expected_category": "英语教育文献"},
+      {"query": "英语论文", "expected_category": "英语教育文献"},
+      {"query": "学术研究", "expected_category": "英语教育文献"},
+      {"query": "教育研究", "expected_category": "英语教育文献"},
+      {"query": "外语教学", "expected_category": "英语教育文献"}
+    ]
+  },
+  "doc": {
+    "path": "testFiles/doc",
+    "queries": [
+      {"query": "读书笔记", "expected_category": "读书笔记"},
+      {"query": "阅读记录", "expected_category": "读书笔记"},
+      {"query": "书籍感想", "expected_category": "读书笔记"},
+      {"query": "读后感", "expected_category": "读书笔记"},
+      {"query": "书籍推荐", "expected_category": "读书笔记"},
+
+      {"query": "计算机网络", "expected_category": "计算机网络实践报告"},
+      {"query": "网络实验", "expected_category": "计算机网络实践报告"},
+      {"query": "Lab实验", "expected_category": "计算机网络实践报告"},
+      {"query": "实验报告", "expected_category": "计算机网络实践报告"},
+      {"query": "课程实践", "expected_category": "计算机网络实践报告"},
+
+      {"query": "剧本", "expected_category": "剧本"},
+      {"query": "小品剧本", "expected_category": "剧本"},
+      {"query": "表演脚本", "expected_category": "剧本"},
+      {"query": "求职面试", "expected_category": "剧本"},
+      {"query": "情景剧", "expected_category": "剧本"},
+
+      {"query": "论文", "expected_category": "论文"},
+      {"query": "学术论文", "expected_category": "论文"},
+      {"query": "毕业论文", "expected_category": "论文"},
+      {"query": "研究报告", "expected_category": "论文"},
+      {"query": "课程论文", "expected_category": "论文"},
+
+      {"query": "需求文档", "expected_category": "需求文档"},
+      {"query": "PRD产品需求", "expected_category": "需求文档"},
+      {"query": "BRD商业需求", "expected_category": "需求文档"},
+      {"query": "功能需求", "expected_category": "需求文档"},
+      {"query": "产品设计", "expected_category": "需求文档"},
+
+      {"query": "用户手册", "expected_category": "用户手册"},
+      {"query": "使用说明", "expected_category": "用户手册"},
+      {"query": "操作指南", "expected_category": "用户手册"},
+      {"query": "系统手册", "expected_category": "用户手册"},
+      {"query": "帮助文档", "expected_category": "用户手册"}
+    ]
+  },
+  "ppt": {
+    "path": "testFiles/ppt",
+    "queries": [
+      {"query": "计算机组成原理", "expected_category": "计算机组成"},
+      {"query": "ALU计算", "expected_category": "计算机组成"},
+      {"query": "数据通路", "expected_category": "计算机组成"},
+      {"query": "控制器", "expected_category": "计算机组成"},
+      {"query": "计算机硬件", "expected_category": "计算机组成"},
+
+      {"query": "节日", "expected_category": "节日"},
+      {"query": "纪念日", "expected_category": "节日"},
+      {"query": "传统节日", "expected_category": "节日"},
+      {"query": "中秋节", "expected_category": "节日"},
+      {"query": "圣诞节", "expected_category": "节日"},
+
+      {"query": "软件需求", "expected_category": "软件需求"},
+      {"query": "需求分析", "expected_category": "软件需求"},
+      {"query": "愿景范围", "expected_category": "软件需求"},
+      {"query": "功能需求", "expected_category": "软件需求"},
+      {"query": "需求评审", "expected_category": "软件需求"},
+
+      {"query": "商业", "expected_category": "商业"},
+      {"query": "商业计划", "expected_category": "商业"},
+      {"query": "创业", "expected_category": "商业"},
+      {"query": "投资", "expected_category": "商业"},
+      {"query": "商业智能", "expected_category": "商业"},
+
+      {"query": "数学物理", "expected_category": "数学物理"},
+      {"query": "物理运动", "expected_category": "数学物理"},
+      {"query": "几何检测", "expected_category": "数学物理"},
+      {"query": "力学", "expected_category": "数学物理"},
+      {"query": "动量碰撞", "expected_category": "数学物理"},
+
+      {"query": "文献知识", "expected_category": "文献知识"},
+      {"query": "查询系统", "expected_category": "文献知识"},
+      {"query": "数据库", "expected_category": "文献知识"},
+      {"query": "电子图书", "expected_category": "文献知识"},
+      {"query": "期刊文献", "expected_category": "文献知识"}
     ]
   }
 }
