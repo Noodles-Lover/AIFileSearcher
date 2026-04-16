@@ -144,12 +144,23 @@ def setup_index():
     return embedder, store, model_load_time
 
 
+# 文件扩展名映射（test_type -> 实际扩展名）
+FILE_EXTENSIONS = {
+    "doc": [".doc", ".docx"],
+    "ppt": [".ppt", ".pptx"],
+    "xls": [".xls", ".xlsx"],
+    "pdf": [".pdf"],
+    "md": [".md"],
+    "txt": [".txt"],
+}
+
+
 def get_files_from_config(test_path: str, test_type: str) -> list:
     """从配置路径获取测试文件"""
-    ext = f".{test_type}"
+    extensions = FILE_EXTENSIONS.get(test_type, [f".{test_type}"])
     files = []
     for filename in os.listdir(test_path):
-        if filename.endswith(ext):
+        if any(filename.lower().endswith(ext) for ext in extensions):
             files.append(os.path.join(test_path, filename))
     return files
 

@@ -124,10 +124,12 @@ class DocParser(TextChunkProcessor):
             return ""
 
         try:
+            # 转换为绝对路径，win32com 需要绝对路径
+            abs_path = os.path.abspath(self.file_path)
             word = win32com.client.Dispatch('Word.Application')
             word.Visible = False
             try:
-                doc = word.Documents.Open(self.file_path)
+                doc = word.Documents.Open(abs_path)
                 try:
                     full_text = [para.Range.Text.strip() for para in doc.Paragraphs if para.Range.Text.strip()]
                     return '\n'.join(full_text)
