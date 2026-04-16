@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 TEST_CASES_FILE = None  # 动态设置
 
 # txt, md, ppt, doc, pdf
-CURRENT_TEST_TYPE = "pdf"
+CURRENT_TEST_TYPE = "txt"
 
 # ============ 性能测试参数 ============
 

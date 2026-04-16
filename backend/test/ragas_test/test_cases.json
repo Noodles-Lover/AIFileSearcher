@@ -39,6 +39,130 @@
       {"query": "支出明细", "expected_category": "财务管理"}
     ]
   },
+  "many_txt": {
+    "path": "testFiles/many_txt",
+    "queries": [
+      {"query": "体检报告在哪里找", "expected_category": "健康医疗"},
+      {"query": "牙齿护理方法", "expected_category": "健康医疗"},
+      {"query": "心理健康怎么调适", "expected_category": "健康医疗"},
+      {"query": "养生保健知识", "expected_category": "健康医疗"},
+      {"query": "病历记录本", "expected_category": "健康医疗"},
+
+      {"query": "围棋怎么下", "expected_category": "娱乐休闲"},
+      {"query": "有什么好玩的桌游", "expected_category": "娱乐休闲"},
+      {"query": "最近上映的电影推荐", "expected_category": "娱乐休闲"},
+      {"query": "游戏通关攻略", "expected_category": "娱乐休闲"},
+      {"query": "收藏的音乐专辑", "expected_category": "娱乐休闲"},
+
+      {"query": "量子物理基础知识", "expected_category": "学习资料"},
+      {"query": "生物化学入门", "expected_category": "学习资料"},
+      {"query": "历史事件回顾", "expected_category": "学习资料"},
+      {"query": "科学常识有哪些", "expected_category": "学习资料"},
+      {"query": "英语学习笔记", "expected_category": "学习资料"},
+
+      {"query": "职业生涯怎么规划", "expected_category": "工作文档"},
+      {"query": "项目管理流程", "expected_category": "工作文档"},
+      {"query": "会议纪要模板", "expected_category": "工作文档"},
+      {"query": "年度工作报告怎么写", "expected_category": "工作文档"},
+      {"query": "项目计划书", "expected_category": "工作文档"},
+
+      {"query": "家居收纳技巧", "expected_category": "生活记录"},
+      {"query": "应急物资储备清单", "expected_category": "生活记录"},
+      {"query": "旅行游记分享", "expected_category": "生活记录"},
+      {"query": "个人日记", "expected_category": "生活记录"},
+      {"query": "购物清单列表", "expected_category": "生活记录"},
+
+      {"query": "个人信用怎么管理", "expected_category": "财务管理"},
+      {"query": "家庭预算怎么制定", "expected_category": "财务管理"},
+      {"query": "投资理财入门", "expected_category": "财务管理"},
+      {"query": "税务筹划方法", "expected_category": "财务管理"},
+      {"query": "储蓄计划", "expected_category": "财务管理"},
+
+      {"query": "托福考试怎么备考", "expected_category": "教育考试"},
+      {"query": "考研复习计划", "expected_category": "教育考试"},
+      {"query": "公务员备考资料", "expected_category": "教育考试"},
+      {"query": "雅思考试技巧", "expected_category": "教育考试"},
+      {"query": "GRE考试内容", "expected_category": "教育考试"},
+
+      {"query": "人工智能发展现状", "expected_category": "科技数码"},
+      {"query": "区块链技术原理", "expected_category": "科技数码"},
+      {"query": "5G通信技术", "expected_category": "科技数码"},
+      {"query": "笔记本电脑选购建议", "expected_category": "科技数码"},
+      {"query": "最新科技动态", "expected_category": "科技数码"},
+
+      {"query": "智能家居系统配置", "expected_category": "房产家居"},
+      {"query": "室内装修设计", "expected_category": "房产家居"},
+      {"query": "家居风水讲究", "expected_category": "房产家居"},
+      {"query": "软装搭配技巧", "expected_category": "房产家居"},
+      {"query": "二手房交易流程", "expected_category": "房产家居"},
+
+      {"query": "汽车保养知识", "expected_category": "汽车交通"},
+      {"query": "安全驾驶技巧", "expected_category": "汽车交通"},
+      {"query": "交通事故处理流程", "expected_category": "汽车交通"},
+      {"query": "汽车保险怎么选", "expected_category": "汽车交通"},
+      {"query": "购车注意事项", "expected_category": "汽车交通"},
+
+      {"query": "股票投资入门", "expected_category": "金融保险"},
+      {"query": "基金怎么投资", "expected_category": "金融保险"},
+      {"query": "保险产品有哪些", "expected_category": "金融保险"},
+      {"query": "家庭保险配置", "expected_category": "金融保险"},
+      {"query": "银行理财产品", "expected_category": "金融保险"},
+
+      {"query": "劳动合同怎么签", "expected_category": "法律合同"},
+      {"query": "房屋租赁合同模板", "expected_category": "法律合同"},
+      {"query": "二手房交易注意事项", "expected_category": "法律合同"},
+      {"query": "婚姻家庭法律", "expected_category": "法律合同"},
+      {"query": "消费者权益保护", "expected_category": "法律合同"},
+
+      {"query": "食品安全知识", "expected_category": "餐饮美食"},
+      {"query": "烹饪技巧分享", "expected_category": "餐饮美食"},
+      {"query": "茶文化介绍", "expected_category": "餐饮美食"},
+      {"query": "咖啡文化", "expected_category": "餐饮美食"},
+      {"query": "餐厅推荐", "expected_category": "餐饮美食"},
+
+      {"query": "健身计划怎么制定", "expected_category": "运动健身"},
+      {"query": "瑜伽入门动作", "expected_category": "运动健身"},
+      {"query": "运动基础知识", "expected_category": "运动健身"},
+      {"query": "减脂增肌方法", "expected_category": "运动健身"},
+      {"query": "运动损伤处理", "expected_category": "运动健身"},
+
+      {"query": "养宠物需要准备什么", "expected_category": "宠物动物"},
+      {"query": "宠物常见疾病", "expected_category": "宠物动物"},
+      {"query": "野生动物保护", "expected_category": "宠物动物"},
+      {"query": "猫咪饲养指南", "expected_category": "宠物动物"},
+      {"query": "狗狗训练方法", "expected_category": "宠物动物"},
+
+      {"query": "摄影入门基础", "expected_category": "摄影艺术"},
+      {"query": "艺术摄影创作", "expected_category": "摄影艺术"},
+      {"query": "相机参数设置", "expected_category": "摄影艺术"},
+      {"query": "构图技巧", "expected_category": "摄影艺术"},
+      {"query": "后期处理教程", "expected_category": "摄影艺术"},
+
+      {"query": "音乐理论基础", "expected_category": "音乐器材"},
+      {"query": "吉他学习方法", "expected_category": "音乐器材"},
+      {"query": "古典音乐欣赏", "expected_category": "音乐器材"},
+      {"query": "乐器选购指南", "expected_category": "音乐器材"},
+      {"query": "音乐编曲入门", "expected_category": "音乐器材"},
+
+      {"query": "徒步旅行路线推荐", "expected_category": "户外旅行"},
+      {"query": "登山探险装备", "expected_category": "户外旅行"},
+      {"query": "露营注意事项", "expected_category": "户外旅行"},
+      {"query": "旅行准备清单", "expected_category": "户外旅行"},
+      {"query": "自驾游攻略", "expected_category": "户外旅行"},
+
+      {"query": "人际关系处理", "expected_category": "心理情感"},
+      {"query": "心理学基础知识", "expected_category": "心理情感"},
+      {"query": "情绪管理方法", "expected_category": "心理情感"},
+      {"query": "压力调节技巧", "expected_category": "心理情感"},
+      {"query": "情商提升", "expected_category": "心理情感"},
+
+      {"query": "世界宗教介绍", "expected_category": "宗教哲学"},
+      {"query": "哲学入门书籍", "expected_category": "宗教哲学"},
+      {"query": "佛教文化", "expected_category": "宗教哲学"},
+      {"query": "道家思想", "expected_category": "宗教哲学"},
+      {"query": "伦理学基本概念", "expected_category": "宗教哲学"}
+    ]
+  },
   "md": {
     "path": "testFiles/md",
     "queries": [
