@@ -310,5 +310,15 @@
       {"query": "电子图书", "expected_category": "文献知识"},
       {"query": "期刊文献", "expected_category": "文献知识"}
     ]
+  },
+  "mixed": {
+    "path": "testFiles",
+    "queries": [
+      {"query": "健康体检报告", "expected_category": "健康"},
+      {"query": "电影推荐", "expected_category": "娱乐"},
+      {"query": "Python编程学习", "expected_category": "编程"},
+      {"query": "会议讨论内容", "expected_category": "会议"},
+      {"query": "音乐相关", "expected_category": "音乐"}
+    ]
   }
 }

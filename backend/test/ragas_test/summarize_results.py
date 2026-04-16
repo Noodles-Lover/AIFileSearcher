@@ -185,17 +185,39 @@ def summarize_test_type(type_dir: str, test_type: str) -> Dict[str, dict]:
     return summarized
 
 
+# 固定排序策略优先级
+CHUNKING_ORDER = [
+    'FixedSize',
+    'Sentence',
+    'Paragraph',
+    'SlidingWindow',
+    'SlideChunking',
+    'MDSemantic',
+]
+
+def _get_chunking_priority(name: str) -> tuple:
+    """获取分块策略的排序优先级"""
+    name_lower = name.lower()
+    
+    # 先按策略类型分组
+    for i, strategy in enumerate(CHUNKING_ORDER):
+        if strategy.lower() in name_lower:
+            return (0, i, name)  # 已知策略，放在前面
+    
+    # 其他策略放在后面，按名称排序
+    return (1, 999, name)
+
+
 def generate_markdown_table(summarized: Dict[str, dict], test_type: str) -> str:
     """生成 Markdown 格式的汇总表格"""
     lines = []
     lines.append(f"# {test_type.upper()} 测试结果汇总")
     lines.append("")
     
-    # 按 P@1 排序
+    # 按固定策略顺序排序
     sorted_items = sorted(
         summarized.items(),
-        key=lambda x: x[1].get('metrics', {}).get('precision_at_1', {}).get('avg', 0),
-        reverse=True
+        key=lambda x: _get_chunking_priority(x[0])
     )
     
     # 检索指标表格
@@ -304,7 +326,7 @@ def generate_summary_json(summarized: Dict[str, dict], test_type: str) -> dict:
 def main():
     parser = argparse.ArgumentParser(description='汇总评估结果')
     parser.add_argument('--type', '-t', 
-                       choices=['txt', 'md', 'pdf', 'doc', 'ppt', 'xls'],
+                       choices=['txt', 'md', 'pdf', 'doc', 'ppt', 'xls', 'many_txt', 'mixed'],
                        default='txt',
                        help='测试类型 (默认: txt)')
     parser.add_argument('--input', '-i', 

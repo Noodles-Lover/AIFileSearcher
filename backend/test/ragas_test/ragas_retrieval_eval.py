@@ -23,9 +23,10 @@ import numpy as np
 
 # 导入配置和工具
 from eval_config import (
-    CURRENT_TEST_TYPE, EMBEDDING_MODEL, EMBEDDING_MODEL_PATH, INDEX_TYPE,
-    ALL_CHUNKING_STRATEGIES, ENABLE_QUERY_REWRITE, LLM_TYPE, PROJECT_ROOT,
-    get_chunking_name
+    CURRENT_TEST_TYPE,
+    ALL_EMBEDDING_MODELS, ALL_INDEX_TYPES, ALL_CHUNKING_STRATEGIES,
+    ENABLE_QUERY_REWRITE, LLM_TYPE, PROJECT_ROOT,
+    get_strategy_name, get_model_path
 )
 from eval_reporter import EvalReporter
 
@@ -111,8 +112,13 @@ def clear_index_files():
     return files_deleted
 
 
-def setup_index():
-    """初始化索引"""
+def setup_index(index_type, embedding_model):
+    """初始化索引
+    
+    Args:
+        index_type: 索引类型
+        embedding_model: 嵌入模型名称
+    """
     clear_index_files()
     time.sleep(0.5)
     
@@ -121,27 +127,28 @@ def setup_index():
     print("=" * 60)
     
     model_load_start = time.time()
-    embedder = EmbeddingModel(model_name=EMBEDDING_MODEL)
+    embedder = EmbeddingModel(model_name=embedding_model)
     model_load_time = time.time() - model_load_start
     
     dimension = embedder.model.get_sentence_embedding_dimension()
+    model_path = get_model_path(embedding_model)
     
     print(f"\n✅ Embedding model loaded")
-    print(f"   Model: {EMBEDDING_MODEL}")
+    print(f"   Model: {embedding_model}")
     print(f"   Dimension: {dimension}")
     print(f"   Load time: {model_load_time:.2f}s")
     
-    print(f"\n📊 Creating index: {INDEX_TYPE}")
+    print(f"\n📊 Creating index: {index_type}")
     store = VectorStore(
         dimension=dimension,
         index_path=get_data_path("faiss_index.bin"),
         metadata_path=get_data_path("metadata.json"),
-        index_type=INDEX_TYPE
+        index_type=index_type
     )
     
     print(f"   Index type: {type(store.index).__name__}")
     
-    return embedder, store, model_load_time
+    return embedder, store, model_load_time, model_path
 
 
 # 文件扩展名映射（test_type -> 实际扩展名）
@@ -152,6 +159,8 @@ FILE_EXTENSIONS = {
     "pdf": [".pdf"],
     "md": [".md"],
     "txt": [".txt"],
+    "many_txt": [".txt"],  # 大量 txt 文件测试
+    "mixed": [".txt", ".md", ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"],  # 混合文件类型
 }
 
 
@@ -382,24 +391,36 @@ def print_metrics(metrics: dict):
     print("=" * 60)
 
 
-def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict = None):
-    """打印性能统计"""
-    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict = None,
+                             strategy_name: str = None, index_type: str = None, embedding_model: str = None):
+    """打印性能统计
+    
+    Args:
+        stats: 性能统计数据
+        model_load_time: 模型加载时间
+        mem_stats: 内存快照
+        strategy_name: 分块策略名称
+        index_type: 索引类型
+        embedding_model: 嵌入模型名称
+    """
+    model_path = get_model_path(embedding_model) if embedding_model else ""
+    model_size = get_model_folder_size(model_path) if model_path else 0
+    actual_strategy = strategy_name if strategy_name else "Native"
     
     print("\n" + "=" * 60)
     print("PERFORMANCE STATISTICS")
     print("=" * 60)
     
     print(f"\n【Model Loading】")
-    print(f"  Embedding Model: {EMBEDDING_MODEL}")
+    print(f"  Embedding Model: {embedding_model}")
     print(f"  Model Size: {format_size(model_size)}")
     print(f"  Load Time: {model_load_time:.2f}s")
     if mem_stats:
         print(f"  Memory After Load: {mem_stats['current_mb']} MB (peak: {mem_stats['peak_mb']} MB)")
     
     print(f"\n【Index Config】")
-    print(f"  Index Type: {INDEX_TYPE}")
-    print(f"  Chunking Strategy: {get_chunking_name()}")
+    print(f"  Index Type: {index_type}")
+    print(f"  Chunking Strategy: {actual_strategy}")
     
     print(f"\n【Index Stats】")
     print(f"  Files Processed: {len(stats['per_file_stats'])}")
@@ -422,19 +443,30 @@ def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict
     print("=" * 60)
 
 
-def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict, chunking_strategy: str) -> dict:
-    """构建性能数据（用于导出）"""
+def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict,
+                             chunking_strategy: str, index_type: str, embedding_model: str) -> dict:
+    """构建性能数据（用于导出）
+    
+    Args:
+        stats: 性能统计数据
+        model_load_time: 模型加载时间
+        mem_after_load: 加载后的内存快照
+        chunking_strategy: 分块策略名称
+        index_type: 索引类型
+        embedding_model: 嵌入模型名称
+    """
     file_count = len(stats['per_file_stats'])
-    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    model_path = get_model_path(embedding_model)
+    model_size = get_model_folder_size(model_path)
     index_size = get_index_size()
     
     return {
         "meta": {
-            "embedding_model": EMBEDDING_MODEL,
-            "model_path": EMBEDDING_MODEL_PATH,
+            "embedding_model": embedding_model,
+            "model_path": model_path,
             "model_size": format_size(model_size),
             "model_load_time": round(model_load_time, 2),
-            "index_type": INDEX_TYPE,
+            "index_type": index_type,
             "chunking_strategy": chunking_strategy,
             "index_size": format_size(index_size)
         },
@@ -459,10 +491,17 @@ def build_performance_data(stats: dict, model_load_time: float, mem_after_load: 
 # 单次评估流程
 # ============================================================
 
-def run_single_evaluation(strategy, strategy_name):
-    """运行单次评估"""
+def run_single_evaluation(strategy, strategy_name, index_type, embedding_model):
+    """运行单次评估
+    
+    Args:
+        strategy: 分块策略对象，None 表示使用原生默认策略
+        strategy_name: 策略名称
+        index_type: 索引类型
+        embedding_model: 嵌入模型名称
+    """
     print("\n" + "=" * 60)
-    print(f"Evaluating: {strategy_name}")
+    print(f"Evaluating: {strategy_name} | Index: {index_type} | Model: {embedding_model}")
     print("=" * 60)
     
     # 加载测试用例
@@ -481,11 +520,11 @@ def run_single_evaluation(strategy, strategy_name):
     
     # Step 2: 初始化索引
     print("\n[Step 2] Initializing index...")
-    embedder, store, model_load_time = setup_index()
+    embedder, store, model_load_time, model_path = setup_index(index_type, embedding_model)
     mem_after_load = snapshot_memory()
     
     # 打印模型信息
-    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    model_size = get_model_folder_size(model_path)
     print(f"   Model size: {format_size(model_size)}")
     print(f"   Memory after load: {mem_after_load['current_mb']} MB (peak: {mem_after_load['peak_mb']} MB)")
     
@@ -539,15 +578,15 @@ def run_single_evaluation(strategy, strategy_name):
     print_metrics(metrics)
     
     # Step 6: 打印性能统计
-    performance = build_performance_data(index_stats, model_load_time, mem_after_load, strategy_name)
-    print_performance_stats(index_stats, model_load_time, mem_after_load)
+    performance = build_performance_data(index_stats, model_load_time, mem_after_load, strategy_name, index_type, embedding_model)
+    print_performance_stats(index_stats, model_load_time, mem_after_load, strategy_name, index_type, embedding_model)
     
     # Step 7: 导出结果
     reporter = EvalReporter()
     json_path, seq = reporter.export(
         test_type=CURRENT_TEST_TYPE,
-        embedding_model=EMBEDDING_MODEL,
-        index_type=INDEX_TYPE,
+        embedding_model=embedding_model,
+        index_type=index_type,
         chunking_name=strategy_name,
         metrics=metrics,
         performance=performance
@@ -555,8 +594,8 @@ def run_single_evaluation(strategy, strategy_name):
     
     txt_path = reporter.export_text(
         test_type=CURRENT_TEST_TYPE,
-        embedding_model=EMBEDDING_MODEL,
-        index_type=INDEX_TYPE,
+        embedding_model=embedding_model,
+        index_type=index_type,
         chunking_name=strategy_name,
         metrics=metrics,
         performance=performance,
@@ -582,34 +621,76 @@ def main():
     print("AIFileSearcher Retrieval Evaluation")
     print("=" * 60)
     
+    # 获取遍历列表（None 转为空列表）
+    embedding_models = ALL_EMBEDDING_MODELS if ALL_EMBEDDING_MODELS else []
+    chunking_strategies = ALL_CHUNKING_STRATEGIES if ALL_CHUNKING_STRATEGIES else []
+    index_types = ALL_INDEX_TYPES if ALL_INDEX_TYPES else []
+    
+    # 如果全部为空，报错退出
+    if not embedding_models and not chunking_strategies and not index_types:
+        print("[Error] No configurations to iterate!")
+        print("  - Set ALL_EMBEDDING_MODELS to iterate embedding models")
+        print("  - Set ALL_CHUNKING_STRATEGIES to iterate chunking strategies")
+        print("  - Set ALL_INDEX_TYPES to iterate index types")
+        return
+    
+    # 补充默认值：确保每个维度至少有一项
+    if not embedding_models:
+        embedding_models = ["bge-base-zh-v1.5"]
+    if not chunking_strategies:
+        chunking_strategies = [None]  # None = 使用原生默认策略
+    if not index_types:
+        index_types = ["IndexFlatL2"]
+    
+    # 计算总测试次数
+    total_tests = len(embedding_models) * len(chunking_strategies) * len(index_types)
+    
     print(f"\n【Configuration】")
-    print(f"  Embedding Model: {EMBEDDING_MODEL}")
-    print(f"  Index Type: {INDEX_TYPE}")
+    print(f"  Embedding Models: {embedding_models}")
+    print(f"  Index Types: {index_types}")
+    print(f"  Chunking Strategies: {[get_strategy_name(s) for s in chunking_strategies]}")
+    print(f"  Total Tests: {total_tests}")
     print(f"  LLM Rewrite: {'Enabled' if ENABLE_QUERY_REWRITE else 'Disabled'}")
     print(f"  LLM Type: {LLM_TYPE}")
     print(f"  Test Type: {CURRENT_TEST_TYPE}")
     
-    # 遍历所有分块策略
+    # 三层嵌套遍历
     results_summary = []
-    for strategy in ALL_CHUNKING_STRATEGIES:
-        strategy_name = str(strategy)
-        metrics, stats = run_single_evaluation(strategy, strategy_name)
-        results_summary.append({
-            "strategy": strategy_name,
-            "metrics": metrics,
-            "chunks": stats['total_chunks']
-        })
+    test_count = 0
+    
+    for embedding_model in embedding_models:
+        for strategy in chunking_strategies:
+            strategy_name = get_strategy_name(strategy)
+            for index_type in index_types:
+                test_count += 1
+                print(f"\n[Test {test_count}/{total_tests}]")
+                
+                metrics, stats = run_single_evaluation(
+                    strategy=strategy,
+                    strategy_name=strategy_name,
+                    index_type=index_type,
+                    embedding_model=embedding_model
+                )
+                
+                results_summary.append({
+                    "embedding_model": embedding_model,
+                    "strategy": strategy_name,
+                    "index_type": index_type,
+                    "metrics": metrics,
+                    "chunks": stats['total_chunks']
+                })
     
     # 打印汇总
-    print("\n" + "=" * 60)
-    print("SUMMARY - All Chunking Strategies")
-    print("=" * 60)
-    print(f"{'Strategy':<40} {'P@1':>6} {'P@3':>6} {'MRR':>6} {'Chunks':>6}")
-    print("-" * 70)
+    print("\n" + "=" * 90)
+    print("SUMMARY")
+    print("=" * 90)
+    print(f"{'Model':<25} {'Strategy':<25} {'Index':<15} {'P@1':>6} {'P@3':>6} {'MRR':>6}")
+    print("-" * 90)
     for r in results_summary:
         m = r['metrics']
-        print(f"{r['strategy']:<40} {m['precision_at_1']:>6.4f} {m['precision_at_3']:>6.4f} {m['mrr']:>6.4f} {r['chunks']:>6}")
-    print("=" * 60)
+        print(f"{r['embedding_model']:<25} {r['strategy']:<25} {r['index_type']:<15} "
+              f"{m['precision_at_1']:>6.4f} {m['precision_at_3']:>6.4f} {m['mrr']:>6.4f}")
+    print("=" * 90)
     
     print("\n[Done] All evaluations complete!")
 
