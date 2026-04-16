@@ -8,8 +8,8 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 # 测试用例 JSON 文件路径
 TEST_CASES_FILE = None  # 动态设置
 
-# 当前测试类型: "txt" 或 "md"
-CURRENT_TEST_TYPE = "doc"
+# txt, md, ppt, doc, pdf
+CURRENT_TEST_TYPE = "pdf"
 
 # ============ 性能测试参数 ============
 
@@ -37,7 +37,8 @@ ALL_CHUNKING_STRATEGIES = [
     FixedSizeChunking(chunk_size=500),
     SentenceChunking(max_chars=500),
     ParagraphChunking(lines_per_para=5, min_para_chars=50),
-    # MDSemanticChunking(max_chunk_size=1200, min_chunk_size=100, max_header_level=3),
+    MDSemanticChunking(max_chunk_size=1200, min_chunk_size=100, max_header_level=3),
+    # SlideChunking()
 ]
 
 # 当前策略（用于单次测试，直接指定一个策略对象）

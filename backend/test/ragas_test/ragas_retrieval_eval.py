@@ -425,8 +425,19 @@ def print_performance_stats(stats: dict, model_load_time: float, mem_stats: dict
 def build_performance_data(stats: dict, model_load_time: float, mem_after_load: dict, chunking_strategy: str) -> dict:
     """构建性能数据（用于导出）"""
     file_count = len(stats['per_file_stats'])
+    model_size = get_model_folder_size(EMBEDDING_MODEL_PATH)
+    index_size = get_index_size()
     
     return {
+        "meta": {
+            "embedding_model": EMBEDDING_MODEL,
+            "model_path": EMBEDDING_MODEL_PATH,
+            "model_size": format_size(model_size),
+            "model_load_time": round(model_load_time, 2),
+            "index_type": INDEX_TYPE,
+            "chunking_strategy": chunking_strategy,
+            "index_size": format_size(index_size)
+        },
         "memory": {
             "after_load_mb": round(mem_after_load['current_mb'], 2),
             "peak_mb": round(mem_after_load['peak_mb'], 2)

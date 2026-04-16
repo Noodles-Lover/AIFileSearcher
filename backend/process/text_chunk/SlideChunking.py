@@ -16,10 +16,10 @@ class SlideChunking(ChunkingStrategy):
 
     def __init__(
         self,
-        max_chunk_size: int = 800,
+        max_chunk_size: int = 500,
         min_chunk_size: int = 100,
         include_notes: bool = True,
-        include_title: bool = True
+        include_title: bool = False
     ):
         """
         Args:
@@ -41,7 +41,7 @@ class SlideChunking(ChunkingStrategy):
         [SLIDE:1:标题1]
         内容1-1
         内容1-2
-        [NOTES:]
+        [备注:]
         备注内容
         [SLIDE:2:标题2]
         内容2-1
@@ -112,9 +112,9 @@ class SlideChunking(ChunkingStrategy):
         """
         slides = []
 
-        # 按 [SLIDE:N] 或 [SLIDE:N:标题] 标记分割
-        import re
-        slide_pattern = re.compile(r'\[SLIDE:(\d+)(?::([^\]]*))?\]')
+        # # 按 [SLIDE:N] 或 [SLIDE:N:标题] 标记分割
+        # import re
+        # slide_pattern = re.compile(r'\[SLIDE:(\d+)(?::([^\]]*))?\]')
 
         matches = list(slide_pattern.finditer(text))
 
@@ -146,7 +146,7 @@ class SlideChunking(ChunkingStrategy):
 
     def _parse_content_and_notes(self, content_block: str) -> Tuple[str, str]:
         """分离正文内容和备注"""
-        notes_marker = '[NOTES:]'
+        notes_marker = '[备注:]'
         notes = ""
 
         if notes_marker in content_block:

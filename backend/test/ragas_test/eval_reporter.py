@@ -102,6 +102,7 @@ class EvalReporter:
         filename = f"{base_name}-{seq}.txt"
         filepath = os.path.join(type_dir, filename)
 
+        perf_meta = performance.get('meta', {})
         memory = performance.get('memory', {})
         perf_stats = performance.get('stats', {})
 
@@ -130,7 +131,14 @@ class EvalReporter:
             f.write("PERFORMANCE STATISTICS\n")
             f.write("=" * 60 + "\n")
             
-            # 从顶层 meta 参数获取模型信息（与 JSON 导出保持一致）
+            f.write(f"\n【Model Loading】\n")
+            f.write(f"  Embedding Model: {perf_meta.get('embedding_model', 'N/A')}\n")
+            f.write(f"  Model Size: {perf_meta.get('model_size', 'N/A')}\n")
+            f.write(f"  Load Time: {perf_meta.get('model_load_time', 0):.2f}s\n")
+            if memory:
+                f.write(f"  Memory After Load: {memory.get('after_load_mb', 'N/A')} MB\n")
+                f.write(f"  Peak Memory: {memory.get('peak_mb', 'N/A')} MB\n")
+            
             f.write(f"\n【Index Config】\n")
             f.write(f"  Index Type: {index_type}\n")
             f.write(f"  Chunking Strategy: {chunking_name}\n")
@@ -139,6 +147,7 @@ class EvalReporter:
             f.write(f"  Files Processed: {perf_stats.get('file_count', 0)}\n")
             f.write(f"  Total Chunks: {perf_stats.get('total_chunks', 0)}\n")
             f.write(f"  Index Vectors: {perf_stats.get('vector_count', 0)}\n")
+            f.write(f"  Index Size: {perf_meta.get('index_size', 'N/A')}\n")
             
             f.write(f"\n【Time Stats】\n")
             f.write(f"  Total Chunking Time: {perf_stats.get('chunk_time', 0):.3f}s\n")
