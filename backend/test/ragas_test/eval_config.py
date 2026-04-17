@@ -8,8 +8,8 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 # 测试用例 JSON 文件路径（动态设置）
 TEST_CASES_FILE = None
 
-# 测试文件类型: txt, md, ppt, doc, pdf, many_txt
-CURRENT_TEST_TYPE = "many_txt"
+# 测试文件类型: txt, md, ppt, doc, pdf, many_txt, mixed
+CURRENT_TEST_TYPE = "mixed"
 
 
 # ============ 分块策略导入 ============
@@ -32,30 +32,25 @@ ALL_EMBEDDING_MODELS = [
     # "bge-m3",
     # "Qwen3-Embedding-0.6B",
     # "bge-large-zh-v1.5",
-    "bge-base-zh-v1.5",
-    # "m3e-base",
+    # "bge-base-zh-v1.5",
+    "m3e-base",
     # "bge-small-zh-v1.5"
 ]
 
 # 所有要测试的索引类型
 ALL_INDEX_TYPES = [
     "IndexFlatL2",
-    # "IndexFlatIP",
-    # "IndexIVFFlat",
-    # "IndexHNSWFlat",
-    # "IndexLSH",
+    "IndexFlatIP",
+    "IndexIVFFlat",
+    "IndexHNSWFlat",
+    "IndexLSH",
 ]
 
 # 所有要测试的分块策略（None = 使用各文件类型的原生默认策略）
-ALL_CHUNKING_STRATEGIES = [
-    # SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=100),
-    # FixedSizeChunking(chunk_size=500),
-    SentenceChunking(max_chars=500),
-    # ParagraphChunking(lines_per_para=5, min_para_chars=50),
-    # MDSemanticChunking(max_chunk_size=1200, min_chunk_size=100, max_header_level=3),
-    # SlideChunking(),
-]
-# ALL_CHUNKING_STRATEGIES = None  # 取消注释则使用原生默认策略
+# 注意：当 ALL_CHUNKING_STRATEGIES 非空时，会对所有文件使用同一策略，
+#      若要按文件类型使用不同策略，请设为 None
+ALL_CHUNKING_STRATEGIES = None  # 使用 DEFAULT_STRATEGIES（按扩展名分配策略）
+# ALL_CHUNKING_STRATEGIES = [SentenceChunking(max_chars=500)]  # 取消注释则对所有文件使用同一策略
 
 
 # ============ 其他配置 ============

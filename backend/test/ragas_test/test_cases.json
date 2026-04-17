@@ -312,13 +312,67 @@
     ]
   },
   "mixed": {
-    "path": "testFiles",
+    "path": "testFiles/mixed",
     "queries": [
-      {"query": "健康体检报告", "expected_category": "健康"},
-      {"query": "电影推荐", "expected_category": "娱乐"},
-      {"query": "Python编程学习", "expected_category": "编程"},
-      {"query": "会议讨论内容", "expected_category": "会议"},
-      {"query": "音乐相关", "expected_category": "音乐"}
+      {"query": "体检报告在哪里", "expected_category": "健康医疗"},
+      {"query": "病历记录", "expected_category": "健康医疗"},
+      {"query": "养生保健知识", "expected_category": "健康医疗"},
+      {"query": "身体检查结果", "expected_category": "健康医疗"},
+      {"query": "健康饮食建议", "expected_category": "健康医疗"},
+
+      {"query": "合同协议", "expected_category": "合同"},
+      {"query": "合作协议书", "expected_category": "合同"},
+      {"query": "租赁合同模板", "expected_category": "合同"},
+      {"query": "建筑施工合同", "expected_category": "合同"},
+      {"query": "商务合作文件", "expected_category": "合同"},
+
+      {"query": "软件需求分析", "expected_category": "软件需求"},
+      {"query": "产品愿景范围", "expected_category": "软件需求"},
+      {"query": "需求评审内容", "expected_category": "软件需求"},
+      {"query": "功能需求文档", "expected_category": "软件需求"},
+      {"query": "复习考试资料", "expected_category": "软件需求"},
+
+      {"query": "电子图书", "expected_category": "文献知识"},
+      {"query": "中文期刊数据库", "expected_category": "文献知识"},
+      {"query": "文献查询系统", "expected_category": "文献知识"},
+      {"query": "学术资料", "expected_category": "文献知识"},
+      {"query": "图书管理系统", "expected_category": "文献知识"},
+
+      {"query": "剧本表演", "expected_category": "剧本"},
+      {"query": "应聘面试", "expected_category": "剧本"},
+      {"query": "情景剧脚本", "expected_category": "剧本"},
+      {"query": "大学生活", "expected_category": "剧本"},
+      {"query": "职场故事", "expected_category": "剧本"},
+
+      {"query": "创意写作", "expected_category": "创意写作"},
+      {"query": "小说作品", "expected_category": "创意写作"},
+      {"query": "散文随笔", "expected_category": "创意写作"},
+      {"query": "文学创作", "expected_category": "创意写作"},
+      {"query": "午夜图书馆", "expected_category": "创意写作"},
+
+      {"query": "会议纪要", "expected_category": "会议纪要"},
+      {"query": "产品周会", "expected_category": "会议纪要"},
+      {"query": "技术方案讨论", "expected_category": "会议纪要"},
+      {"query": "Sprint评审", "expected_category": "会议纪要"},
+      {"query": "项目会议记录", "expected_category": "会议纪要"},
+
+      {"query": "川菜烹饪", "expected_category": "美食烹饪"},
+      {"query": "烘焙入门", "expected_category": "美食烹饪"},
+      {"query": "养生茶饮", "expected_category": "美食烹饪"},
+      {"query": "做菜食谱", "expected_category": "美食烹饪"},
+      {"query": "厨房技巧", "expected_category": "美食烹饪"},
+
+      {"query": "创新创业计划", "expected_category": "计划书"},
+      {"query": "项目计划书", "expected_category": "计划书"},
+      {"query": "商业计划", "expected_category": "计划书"},
+      {"query": "创业项目", "expected_category": "计划书"},
+      {"query": "DIY创业", "expected_category": "计划书"},
+
+      {"query": "投资理财", "expected_category": "财务管理"},
+      {"query": "家庭预算", "expected_category": "财务管理"},
+      {"query": "税务筹划", "expected_category": "财务管理"},
+      {"query": "储蓄计划", "expected_category": "财务管理"},
+      {"query": "财务规划", "expected_category": "财务管理"}
     ]
   }
 }

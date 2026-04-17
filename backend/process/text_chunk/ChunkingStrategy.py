@@ -223,12 +223,14 @@ class ParagraphChunking(ChunkingStrategy):
 from .MDSemanticChunking import MDSemanticChunking
 from .SlideChunking import SlideChunking
 
+# 各文件类型的默认分块策略
+# 可在测试时通过修改此配置来切换策略
 ChunkingStrategy.DEFAULT_STRATEGIES = {
-    '.md': MDSemanticChunking(),           # 按标题层级语义分块
-    '.txt': SlidingWindowChunking(chunk_size=1000, overlap=100, min_chunk_size=100),
-    '.pdf': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
-    '.docx': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
-    '.doc': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),
-    '.pptx': SlideChunking(),             # 按幻灯片分块
-    '.ppt': SlideChunking(),               # 按幻灯片分块
+    '.md': ParagraphChunking(lines_per_para=5, min_para_chars=50),     # 段落分块
+    '.txt': ParagraphChunking(lines_per_para=5, min_para_chars=50),   # 段落分块
+    '.docx': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),  # 滑动窗口
+    '.doc': SlidingWindowChunking(chunk_size=500, overlap=50, min_chunk_size=50),    # 滑动窗口
+    '.pdf': SentenceChunking(max_chars=500),                           # 句子分块
+    '.pptx': SlideChunking(),                                           # 按幻灯片分块
+    '.ppt': SlideChunking(),                                            # 按幻灯片分块
 }
