@@ -5,6 +5,8 @@ from openai import OpenAI
 import os
 import winreg
 
+from ..utils.settings_manager import settings_manager
+
 
 def disable_system_proxy():
     """临时禁用 Windows 系统代理"""
@@ -51,9 +53,14 @@ class DeepSeekLLM:
     MODEL = "deepseek-chat"
     
     def __init__(self, api_key: str = ""):
-        # 如果没有提供 API Key，使用默认的
+        # 优先级：参数 > 设置文件 > 环境变量
         if not api_key:
-            api_key = "PROTECTED_KEY_REMOVED"
+            settings = settings_manager.load()
+            api_key = settings.get("deepseek_api_key", "")
+        if not api_key:
+            api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not api_key:
+            raise ValueError("DeepSeek API Key 未设置，请传入 api_key 参数、配置 settings.json 或设置 DEEPSEEK_API_KEY 环境变量")
         
         # 禁用系统代理
         self._proxy_enabled = 0
