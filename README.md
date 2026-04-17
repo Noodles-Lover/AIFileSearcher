@@ -7,53 +7,114 @@
 - **语义搜索**：使用向量嵌入模型进行智能内容搜索
 - **多格式支持**：支持 PDF、DOCX、PPTX、TXT、MD、图片、二进制文件等
 - **实时进度反馈**：建立索引时提供实时进度显示（SSE流式输出）
-- **本地模型支持**：支持加载本地嵌入模型（ BGE-M3）和 LLM 模型（Qwen, Phi）
+- **本地模型支持**：支持加载本地嵌入模型（BGE-M3）和 LLM 模型
 - **智能缓存管理**：避免重复处理未修改文件，提高索引效率
 - **模型热切换**：支持在设置页面切换嵌入模型和 LLM 模型
-- **空间管理**：提供索引和缓存的清理功能
+- **可配置分块策略**：支持多种分块策略（段落、滑动窗口、句子、语义分块等）
+- **多种索引类型**：支持 FAISS 多种索引（Flat、IVF、HNSW、LSH等）
+- **检索评估框架**：基于 RAGAS 的检索质量评估工具
 
 ## 📁 项目结构
 
 ```
 AIFileSearcher/
-├── frontend/                 # React 前端项目
+├── frontend/                         # React + TypeScript 前端
 │   ├── src/
-│   │   ├── pages/           # 页面组件
-│   │   │   ├── Home.tsx     # 主页面（搜索和索引）
-│   │   │   └── Settings.tsx # 设置页面
-│   │   └── components/      # 通用组件
-│   └── package.json
-├── backend/                  # Python 后端
-│   ├── api/                 # HTTP 接口层
-│   │   ├── index.py         # 索引接口（SSE流式输出）
-│   │   ├── search.py        # 搜索接口
-│   │   ├── files.py         # 文件操作接口
-│   │   ├── llm.py           # LLM 模型管理接口
-│   │   └── server.py        # FastAPI 服务器
-│   ├── gui/                 # 桌面 GUI (PyQt6)
-│   │   └── main.py          # 主窗口启动
-│   ├── RAG/                 # RAG 核心模块
-│   │   ├── SystemManager.py # 系统管理器（单例模式）
-│   │   ├── EmbeddingModel.py # 嵌入模型封装
-│   │   ├── LocalLLM.py       # 本地 LLM 封装
-│   │   ├── VectorStore.py   # FAISS 向量存储
-│   │   └── FileCache.py     # 文件缓存管理
-│   ├── process/             # 文件处理模块
-│   │   ├── FileProcessor.py # 文件处理器调度器
-│   │   ├── BaseFileProcessor.py # 处理基类
-│   │   ├── text_chunk/      # 文本分块处理器
-│   │   ├── semi_structured/ # 半结构化描述处理器
-│   │   └── binary/          # 二进制文件处理器
-│   └── test/                # 测试脚本
-├── models/                   # 本地模型存储
-│   ├── embedding/            # 嵌入模型（如 bge-m3）
-│   └── LLM/                 # LLM 模型（如 Qwen2.5-3B-Instruct）
-├── data/                     # 向量数据库和缓存
-│   ├── faiss_index.bin      # FAISS 向量索引
-│   ├── metadata.json        # 向量元数据
-│   └── file_cache.json      # 文件修改时间缓存
-├── references/               # 参考代码
-├── testFiles/               # 测试文件
+│   │   ├── components/               # 通用组件
+│   │   ├── pages/                    # 页面组件
+│   │   │   ├── Home.tsx             # 主页面（搜索和索引）
+│   │   │   └── Settings.tsx         # 设置页面
+│   │   ├── App.tsx                   # 应用入口
+│   │   └── main.tsx                  # React 渲染入口
+│   ├── package.json
+│   └── vite.config.ts                # Vite 配置
+│
+├── backend/                          # Python 后端
+│   ├── api/                         # HTTP 接口层
+│   │   ├── index.py                 # 索引接口（SSE流式输出）
+│   │   ├── search.py                # 搜索接口
+│   │   ├── files.py                 # 文件操作接口
+│   │   ├── llm.py                   # LLM 模型管理接口
+│   │   └── server.py                # FastAPI 服务器
+│   │
+│   ├── gui/                          # 桌面 GUI (PyQt6)
+│   │   └── main.py                  # 主窗口启动
+│   │
+│   ├── RAG/                          # RAG 核心模块
+│   │   ├── EmbeddingModel.py        # 嵌入模型封装
+│   │   ├── VectorStore.py            # FAISS 向量存储
+│   │   ├── FileCache.py              # 文件缓存管理
+│   │   ├── SystemManager.py          # 系统管理器（单例模式）
+│   │   ├── LocalLLM.py               # 本地 LLM 封装
+│   │   ├── DeepSeekLLM.py            # DeepSeek API 封装
+│   │   └── DEVELOPMENT.md            # RAG 模块开发文档
+│   │
+│   ├── process/                      # 文件处理模块
+│   │   ├── FileProcessor.py          # 文件处理器调度器
+│   │   ├── BaseFileProcessor.py       # 处理基类
+│   │   ├── text_chunk/               # 文本分块处理器
+│   │   │   ├── TextChunkProcessor.py # 文本处理器基类
+│   │   │   ├── ChunkingStrategy.py   # 分块策略（策略模式）
+│   │   │   │   ├── ParagraphChunking      # 段落分块
+│   │   │   │   ├── SlidingWindowChunking  # 滑动窗口分块
+│   │   │   │   ├── SentenceChunking        # 句子分块
+│   │   │   │   └── FixedSizeChunking      # 固定大小分块
+│   │   │   ├── MDSemanticChunking.py      # MD 语义分块
+│   │   │   ├── SlideChunking.py            # PPT 幻灯片分块
+│   │   │   ├── PDFParser.py               # PDF 解析器
+│   │   │   ├── DocParser.py                # DOC/DOCX 解析器
+│   │   │   ├── PPTParser.py               # PPT 解析器
+│   │   │   ├── MDParser.py                # MD 解析器
+│   │   │   ├── TXTParser.py               # TXT 解析器
+│   │   │   ├── ImageParser.py             # 图片解析器
+│   │   │   └── TablePreprocessor.py       # 表格预处理
+│   │   ├── semi_structured/              # 半结构化文件处理
+│   │   │   └── SemiStructuredProcessor.py
+│   │   ├── binary/                       # 二进制文件处理
+│   │   │   └── BinaryProcessor.py
+│   │   └── ProcessDocs.md                # 文件处理开发文档
+│   │
+│   ├── utils/                            # 工具模块
+│   │   ├── path_utils.py                 # 路径工具
+│   │   ├── search_utils.py               # 搜索工具
+│   │   └── IndexedFoldersManager.py      # 索引文件夹管理
+│   │
+│   ├── test/                             # 测试脚本
+│   │   ├── ragas_test/                   # RAG 评估框架
+│   │   │   ├── eval_config.py            # 评估配置
+│   │   │   ├── eval_reporter.py          # 结果报告
+│   │   │   ├── ragas_retrieval_eval.py  # 检索评估脚本
+│   │   │   ├── ragas_evaluation.py       # 评估工具
+│   │   │   ├── summarize_results.py      # 结果汇总
+│   │   │   ├── test_cases.json          # 测试用例
+│   │   │   ├── EVAL_GUIDE.md            # 评估指南
+│   │   │   └── result/                   # 评估结果
+│   │   └── TESTSCRIPTS.md               # 测试脚本说明
+│   │
+│   ├── DEVELOPMENT.md                    # 后端开发指南
+│   └── requirements.txt                   # Python 依赖
+│
+├── models/                               # 本地模型存储
+│   ├── embedding/                        # 嵌入模型
+│   │   ├── bge-base-zh-v1.5/
+│   │   ├── bge-large-zh-v1.5/
+│   │   └── bge-small-zh-v1.5/
+│   └── LLM/                              # LLM 模型
+│
+├── data/                                 # 向量数据库和缓存
+│   ├── faiss_index.bin                  # FAISS 向量索引
+│   ├── metadata.json                     # 向量元数据
+│   └── file_cache.json                  # 文件修改时间缓存
+│
+├── testFiles/                            # 测试文件
+│   ├── mixed/                            # 混合格式测试集（30个文件）
+│   ├── txt/                              # TXT 文件测试集
+│   ├── md/                               # MD 文件测试集
+│   ├── pdf/                              # PDF 文件测试集
+│   ├── doc/                              # DOC 文件测试集
+│   └── ppt/                              # PPT 文件测试集
+│
+├── references/                           # 参考代码
 └── README.md
 ```
 
@@ -124,55 +185,59 @@ python gui/main.py
 - **python-pptx** (PPTX 解析)
 - **openpyxl** (Excel 解析)
 
-## 🎯 使用指南
-
-### 建立索引
-1. 点击"建立索引"按钮
-2. 选择要索引的文件夹
-3. 观察实时进度反馈
-4. 等待索引完成
-
-### 文件名搜索
-1. 切换到"文件名"模式
-2. 输入搜索关键词
-3. 点击"搜索"按钮
-
-### 语义搜索
-1. 切换到"语义"模式
-2. 输入语义关键词（如"人工智能"）
-3. 点击"搜索"按钮
-
-### 切换模型
-1. 进入设置页面
-2. 选择嵌入模型或 LLM 模型
-3. 模型将自动加载并生效
-
-### 空间管理
-1. 进入设置页面
-2. 查看当前索引和缓存大小
-3. 点击"清理索引"或"清理缓存"
-
 ## 🔧 核心特性
 
+### 分块策略（策略模式）
+
+系统采用**策略模式**实现多种分块算法，可按文件类型自动选择：
+
+```python
+# 默认分块策略配置
+DEFAULT_STRATEGIES = {
+    '.md': ParagraphChunking(),     # 段落分块
+    '.txt': ParagraphChunking(),     # 段落分块
+    '.docx': SlidingWindowChunking(),  # 滑动窗口
+    '.doc': SlidingWindowChunking(),   # 滑动窗口
+    '.pdf': SentenceChunking(),        # 句子分块
+    '.pptx': SlideChunking(),           # 幻灯片分块
+}
+```
+
+**支持的分块策略**：
+| 策略 | 说明 | 适用场景 |
+|------|------|---------|
+| ParagraphChunking | 按段落/换行分块 | TXT, MD |
+| SlidingWindowChunking | 滑动窗口重叠分块 | DOC, 结构化文档 |
+| SentenceChunking | 按句子分块 | PDF |
+| FixedSizeChunking | 固定字符数分块 | 通用 |
+| MDSemanticChunking | 按 Markdown 标题层级分块 | MD |
+| SlideChunking | 按 PPT 幻灯片分块 | PPTX, PPT |
+
+### FAISS 索引类型
+
+支持多种 FAISS 索引类型：
+
+| 索引类型 | 说明 | 特点 |
+|---------|------|------|
+| IndexFlatL2 | 精确 L2 距离 | 精确但慢 |
+| IndexFlatIP | 内积相似度 | 精确但慢 |
+| IndexIVFFlat | IVF 聚类加速 | 需训练 |
+| IndexHNSWFlat | HNSW 图索引 | 高召回高速 |
+| IndexLSH | 局部敏感哈希 | 二值向量 |
+
 ### 文件处理模式
+
 - **文本分块 (TEXT_CHUNK)**：直接分块存储，不调用 LLM
 - **半结构化描述 (SEMI_STRUCTURED)**：使用 LLM 生成内容描述
 - **二进制描述 (BINARY)**：根据文件名和目录结构生成功能描述
 
 ### 实时进度反馈
-- 使用 **SSE (Server-Sent Events)** 实现真正的流式输出
-- 每个文件处理完成后立即更新进度
-- 支持错误、跳过、完成等多种状态反馈
+
+使用 **SSE (Server-Sent Events)** 实现真正的流式输出，每个文件处理完成后立即更新进度。
 
 ### 智能缓存管理
-- 基于**文件修改时间**的智能缓存
-- 避免重复处理未修改文件
-- 支持增量索引和缓存清理
 
-### 模型管理
-- **嵌入模型**：支持 BGE-M3 等多语言模型
-- **LLM 模型**：支持 Qwen、Phi 等本地 LLM
-- **热切换**：在设置页面实时切换模型
+基于**文件修改时间**的智能缓存，避免重复处理未修改文件，支持增量索引。
 
 ## 📚 文档
 
@@ -201,20 +266,16 @@ python gui/main.py
 - 检查文件是否被正确解析
 - 调整搜索关键词
 
-### 性能优化
-
-- **大文件处理**：建议分批索引
-- **内存管理**：定期清理缓存
-- **磁盘空间**：确保 `data/` 目录有足够空间
-
 ## 🔄 开发指南
 
 ### 添加新文件格式支持
+
 1. 在 `process/text_chunk/` 创建 `XXXParser.py` 继承 `TextChunkProcessor`
-2. 在 `TextChunkProcessor.PARSER_MAPPING` 注册扩展名
-3. 添加相应的测试用例
+2. 在 `FileProcessor.EXTENSION_PROCESSOR` 注册扩展名
+3. 在 `ChunkingStrategy.DEFAULT_STRATEGIES` 添加默认分块策略
 
 ### 自定义嵌入模型
+
 1. 将模型放入 `models/embedding/` 目录
 2. 在设置页面选择新模型
 3. 测试模型兼容性

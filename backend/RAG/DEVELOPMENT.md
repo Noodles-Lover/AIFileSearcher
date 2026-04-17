@@ -11,8 +11,8 @@ RAG 模块是 AI 文件搜索器的核心组件，负责文件处理、向量化
 │                     SystemManager                        │
 │              (RAG 系统对外统一接口)                       │
 │  ┌─────────────┬─────────────┬─────────────────────┐   │
-│  │ Embedding   │  LocalLLM   │    VectorStore      │   │
-│  │   Model     │             │                     │   │
+│  │ Embedding   │  LocalLLM    │    VectorStore       │   │
+│  │   Model     │ DeepSeekLLM │                     │   │
 │  └─────────────┴─────────────┴─────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
            │              │                │
@@ -28,7 +28,7 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 
 **主要功能**：
 - 嵌入模型管理 (EmbeddingModel)
-- LLM 管理 (LocalLLM)
+- LLM 管理 (LocalLLM / DeepSeekLLM)
 - 向量存储管理 (VectorStore)
 - 单例模式确保全局唯一实例
 
@@ -46,11 +46,6 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 | `unload_llm()` | 卸载 LLM |
 | `generate_with_llm()` | 封装 LLM 生成接口 |
 
-**配置读取**：
-- `embedding_model`: 嵌入模型名称（默认 bge-m3）
-- `llm_model`: LLM 模型名称
-- `index_type`: 向量索引类型（默认 IndexFlatL2）
-
 ---
 
 ### EmbeddingModel - 嵌入模型
@@ -62,6 +57,12 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 - 文本向量化
 - 图像向量化（多模态模型）
 
+**支持的模型**：
+- BGE 系列 (bge-base-zh-v1.5, bge-large-zh-v1.5, bge-small-zh-v1.5)
+- BGE-M3 (多语言、多模态)
+- M3E 系列
+- Qwen3-Embedding
+
 **关键方法**：
 - `encode(texts)` - 文本转向量
 - `encode_images(images)` - 图像转向量
@@ -70,7 +71,7 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 
 ### LocalLLM - 本地 LLM
 
-负责 LLM 推理。
+负责本地 LLM 推理。
 
 **主要功能**：
 - 加载 HuggingFace 因果语言模型
@@ -81,27 +82,55 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 
 ---
 
+### DeepSeekLLM - DeepSeek API 封装
+
+负责调用 DeepSeek API 进行 LLM 推理。
+
+**主要功能**：
+- 调用 DeepSeek API
+- 支持流式输出
+- 错误重试
+
+**关键方法**：
+- `generate(prompt, system_prompt)` - 生成文本
+
+---
+
 ### VectorStore - 向量存储
 
-负责向量数据的存储和检索。
+负责向量数据的存储和检索，基于 FAISS。
 
 **主要功能**：
 - FAISS 索引管理
 - 向量添加和删除
 - 相似度搜索
 - 元数据管理
+- 标记删除模式（支持 LSH 等索引）
+
+**支持的索引类型**：
+
+| 索引类型 | 说明 | 特点 |
+|---------|------|------|
+| IndexFlatL2 | 精确 L2 距离 | 精确但慢 |
+| IndexFlatIP | 内积相似度 | 精确但慢 |
+| IndexIVFFlat | IVF 聚类加速 | 需训练数据 |
+| IndexHNSWFlat | HNSW 图索引 | 高召回高速 |
+| IndexLSH | 局部敏感哈希 | 二值向量压缩 |
 
 **关键方法**：
 
 | 方法 | 说明 |
 |------|------|
-| `add(vectors, metadata, file_name)` | 添加向量 |
-| `search(query_vector, top_k)` | 搜索相似向量 |
+| `add(vectors, metas)` | 添加向量 |
+| `search(query_vector, k)` | 搜索相似向量 |
+| `remove_vectors_by_indices(indices)` | 删除指定索引的向量 |
 | `remove_vectors_by_file(file_path)` | 删除指定文件的向量 |
+| `rebuild_index()` | 重建索引（清除标记删除的向量） |
 
 **存储文件**：
-- `local_data/faiss_index.bin` - FAISS 索引文件
-- `local_data/metadata.json` - 元数据文件
+- `data/faiss_index.bin` - FAISS 索引文件
+- `data/metadata.json` - 元数据文件
+- `data/faiss_index.info` - 索引信息文件
 
 ---
 
@@ -122,24 +151,36 @@ RAG 系统对外统一接口，负责加载和管理各组件实例。
 | `update_file_cache(file_path)` | 更新文件缓存 |
 | `clean_nonexistent_files()` | 清理不存在文件的缓存 |
 
-**缓存文件**：`local_data/file_cache.json`
-
 ---
 
 ### 分块策略 (ChunkingStrategy)
 
-提供多种文本分块策略，支持灵活的内容切分。
+提供多种文本分块策略，支持灵活的内容切分（策略模式）。
 
 **支持的策略**：
 
 | 策略 | 说明 |
 |------|------|
-| `FixedSizeChunking` | 固定字符数分块 |
-| `ParagraphChunking` | 按段落分块 |
-| `SentenceChunking` | 按句子分块 |
-| `SlidingWindowChunking` | 滑动窗口分块（带重叠） |
+| FixedSizeChunking | 固定字符数分块 |
+| ParagraphChunking | 按段落分块 |
+| SentenceChunking | 按句子分块 |
+| SlidingWindowChunking | 滑动窗口分块（带重叠） |
+| MDSemanticChunking | 按 Markdown 标题层级分块 |
+| SlideChunking | 按 PPT 幻灯片分块 |
 
-**默认策略映射**：不同文件类型使用不同的默认分块策略。
+**默认策略映射**：
+
+```python
+DEFAULT_STRATEGIES = {
+    '.md': ParagraphChunking(),       # 段落分块
+    '.txt': ParagraphChunking(),      # 段落分块
+    '.docx': SlidingWindowChunking(), # 滑动窗口分块
+    '.doc': SlidingWindowChunking(),   # 滑动窗口分块
+    '.pdf': SentenceChunking(),        # 句子分块
+    '.pptx': SlideChunking(),         # 幻灯片分块
+    '.ppt': SlideChunking(),          # 幻灯片分块
+}
+```
 
 ---
 
@@ -158,14 +199,18 @@ from backend.RAG.SystemManager import SystemManager
 
 sm = SystemManager.get_instance()
 
+# 嵌入模型
 embedding_model = sm.get_embedding_model()
 vectors = embedding_model.encode(["hello world"])
 
+# 向量存储
 vector_store = sm.get_vector_store()
 vector_store.add(vectors, metadata, file_name)
 
+# 搜索
 results = vector_store.search(query_vector, top_k=5)
 
+# LLM 生成
 response = sm.generate_with_llm(prompt)
 ```
 
