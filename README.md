@@ -279,3 +279,15 @@ DEFAULT_STRATEGIES = {
 1. 将模型放入 `models/embedding/` 目录
 2. 在设置页面选择新模型
 3. 测试模型兼容性
+
+## 🤝 参考与致谢
+
+本项目参考或借鉴了以下开源项目：
+
+| 项目 | 描述 | 许可证 |
+|------|------|--------|
+| [semantra](https://github.com/freedmand/semantra) | 多功能语义搜索工具，支持本地文本和PDF文件的语义搜索 | MIT |
+| [SearchAnything](https://github.com/kaijiezhu11/SearchAnything) | 基于 AI 模型的本地语义搜索引擎，支持文本和图像搜索 | MIT |
+| [everything-ai-chat](https://github.com/MaskerPRC/everything-ai-chat) | 现代化 Everything 搜索客户端，结合 AI 智能与极速本地搜索 | - |
+
+感谢这些优秀的开源项目提供的灵感与参考！
