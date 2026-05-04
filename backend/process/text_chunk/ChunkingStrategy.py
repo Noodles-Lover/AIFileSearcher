@@ -233,4 +233,7 @@ ChunkingStrategy.DEFAULT_STRATEGIES = {
     '.pdf': SentenceChunking(max_chars=500),                           # 句子分块
     '.pptx': SlideChunking(),                                           # 按幻灯片分块
     '.ppt': SlideChunking(),                                            # 按幻灯片分块
+    '.srt': ParagraphChunking(lines_per_para=8, min_para_chars=50),   # 字幕段落分块
+    '.vtt': ParagraphChunking(lines_per_para=8, min_para_chars=50),   # 字幕段落分块
+    '.eml': ParagraphChunking(lines_per_para=10, min_para_chars=50),  # 邮件段落分块
 }

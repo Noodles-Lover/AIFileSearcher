@@ -15,24 +15,33 @@ class ProcessingMode(Enum):
 
 EXTENSION_PROCESSOR = {
     "text_chunk": {
-        ".txt", ".md", ".markdown", ".rst",
-        ".pdf", ".doc", ".docx", ".rtf",
-        ".csv", ".tsv",
-        ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp",
-        ".go", ".rs", ".rb", ".php", ".swift", ".kt",
-        ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg",
-        ".html", ".htm", ".css", ".scss",
-        ".ipynb", ".log", ".sh", ".bash", ".zsh", ".bat",
-        ".sql",
+        ".txt", ".md", ".markdown",
+        ".pdf", ".doc", ".docx",
         ".pptx", ".ppt",
+        # 字幕（清洗后分块）
+        ".srt", ".vtt",
+        # 邮件（提取正文后分块）
+        ".eml",
     },
     "semi_structured": {
-        ".xls", ".xlsx", ".ods",
+        # 表格数据
+        ".xlsx",
+        ".csv", ".tsv",
         ".parquet", ".feather",
+        # 数据库
         ".db", ".sqlite", ".sqlite3",
-        ".eml", ".msg",
+        # 记录数据
         ".jsonl",
-        ".srt", ".vtt",
+        # 配置/结构化文件
+        ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg",
+        # 源代码文件
+        ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp",
+        ".go", ".rs", ".rb", ".php", ".swift", ".kt",
+        ".html", ".htm", ".css", ".scss",
+        ".sql", ".ipynb",
+        ".sh", ".bash", ".zsh", ".bat",
+        # 日志文件
+        ".log",
     },
     "binary": {
         ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",

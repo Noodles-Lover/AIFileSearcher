@@ -194,7 +194,7 @@ async def index_folder(request: dict):
             await asyncio.sleep(0)
             
             # 发送开始事件
-            yield f"data: {json.dumps({'status': 'start', 'current': 0, 'total': total_files, 'percent': 0, 'msg': f'找到 {total_files} 個支持的文件'})}\n\n"
+            yield f"data: {json.dumps({'status': 'start', 'current': 0, 'total': total_files, 'percent': 0, 'msg': f'找到 {total_files} 个支持的文件'})}\n\n"
             await asyncio.sleep(0)
             
             print(f"🚀 开始处理 {total_files} 个文件...")
