@@ -5,7 +5,12 @@ import type { FileItem } from '../../components/FileIcon';
 
 interface PreviewResponse {
   error?: string;
-  content?: string;
+  chunks?: string[];
+  total_chunks?: number;
+  strategy?: string;
+  meta?: any;
+  type?: string;
+  has_more?: boolean;
 }
 
 export function usePreviewFeature(searchQuery: string) {
@@ -13,6 +18,10 @@ export function usePreviewFeature(searchQuery: string) {
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTitle, setPreviewTitle] = useState('');
+  const [previewChunks, setPreviewChunks] = useState<string[]>([]);
+  const [previewStrategy, setPreviewStrategy] = useState('');
+  const [previewTotalChunks, setPreviewTotalChunks] = useState(0);
+  const [previewHasMore, setPreviewHasMore] = useState(false);
   const [chunkVisible, setChunkVisible] = useState(false);
   const [chunkContent, setChunkContent] = useState('');
   const [chunkTitle, setChunkTitle] = useState('');
@@ -23,12 +32,27 @@ export function usePreviewFeature(searchQuery: string) {
     setPreviewVisible(true);
     setPreviewLoading(true);
     setPreviewContent('');
+    setPreviewChunks([]);
 
     try {
       const data = await apiGet<PreviewResponse>(`${API_ENDPOINTS.PREVIEW}?path=${encodeURIComponent(record.path)}`);
-      setPreviewContent(data.error ? `Error: ${data.error}` : (data.content || '无预览内容'));
+      
+      if (data.error) {
+        setPreviewContent(`Error: ${data.error}`);
+        setPreviewChunks([]);
+      } else if (data.chunks && data.chunks.length > 0) {
+        setPreviewChunks(data.chunks);
+        setPreviewStrategy(data.strategy || '');
+        setPreviewTotalChunks(data.total_chunks || 0);
+        setPreviewHasMore(data.has_more || false);
+        setPreviewContent('');
+      } else {
+        setPreviewContent('无预览内容');
+        setPreviewChunks([]);
+      }
     } catch {
       setPreviewContent('预览加载失败');
+      setPreviewChunks([]);
     } finally {
       setPreviewLoading(false);
     }
@@ -80,6 +104,10 @@ export function usePreviewFeature(searchQuery: string) {
     previewContent,
     previewLoading,
     previewTitle,
+    previewChunks,
+    previewStrategy,
+    previewTotalChunks,
+    previewHasMore,
     chunkVisible,
     setChunkVisible,
     chunkContent,

@@ -102,6 +102,22 @@ const styles: Record<string, CSSProperties> = {
   },
   chunkTags: { marginBottom: '8px' },
   chunkText: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
+  previewInfo: {
+    marginBottom: '16px',
+    padding: '8px 12px',
+    background: '#e6f7ff',
+    borderRadius: '4px',
+    fontSize: '13px',
+    color: '#1890ff',
+  },
+  previewChunkItem: {
+    marginBottom: '16px',
+    padding: '12px',
+    background: '#ffffec',
+    border: '1px solid #d9d9d9',
+    borderRadius: '6px',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+  },
   input: { fontSize: '14px' },
   inputActions: { display: 'flex', justifyContent: 'space-between', marginTop: '10px' },
   filterInput: { marginTop: '8px' },
@@ -244,8 +260,28 @@ const Home: React.FC = () => {
           <div style={styles.previewLoading}>
             <Spin size="large" />
           </div>
+        ) : preview.previewChunks && preview.previewChunks.length > 0 ? (
+          <div>
+            <div style={styles.previewInfo}>
+              <span>分块策略: {preview.previewStrategy}</span>
+              <span style={{ marginLeft: '16px' }}>总分块数: {preview.previewTotalChunks}</span>
+            </div>
+            {preview.previewChunks.map((chunk, index) => (
+              <div key={index} style={styles.previewChunkItem}>
+                <div style={styles.chunkTags}>
+                  <Tag color="blue">分块 {index + 1}</Tag>
+                </div>
+                <Text style={styles.chunkText}>{chunk}</Text>
+              </div>
+            ))}
+            {preview.previewHasMore && (
+              <div style={{ textAlign: 'center', color: '#999', marginTop: '16px' }}>
+                ... (更多内容已省略，共 {preview.previewTotalChunks} 个分块)
+              </div>
+            )}
+          </div>
         ) : (
-          <pre style={styles.previewContent}>{preview.previewContent}</pre>
+          <pre style={styles.previewContent}>{preview.previewContent || '无预览内容'}</pre>
         )}
       </CustomModal>
 

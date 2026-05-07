@@ -143,6 +143,18 @@ class FileProcessor:
                 parser_kwargs["chunking_strategy"] = self.chunking_strategy
             
             parser = parser_cls(**parser_kwargs)
+            
+            # 获取分块策略描述
+            if processor_type == "text_chunk":
+                # TextChunkProcessor 有 chunking_strategy 属性
+                strategy_name = str(parser.chunking_strategy) if hasattr(parser, 'chunking_strategy') else "Unknown"
+            elif processor_type == "semi_structured":
+                strategy_name = "LLM描述"
+            elif processor_type == "binary":
+                strategy_name = "二进制分析"
+            else:
+                strategy_name = processor_type
+            
             result = parser.get_text()
 
             if isinstance(result, list):
@@ -154,6 +166,7 @@ class FileProcessor:
                     "chunks": result,
                     "chunk_count": len(result),
                     "processing_mode": processor_type,
+                    "strategy": strategy_name,
                     "embedding_mode": "text",
                 }
             else:
@@ -165,6 +178,7 @@ class FileProcessor:
                     "chunks": [result],
                     "chunk_count": 1,
                     "processing_mode": processor_type,
+                    "strategy": strategy_name,
                     "embedding_mode": "text",
                 }
         except Exception as e:

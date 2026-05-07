@@ -99,14 +99,14 @@ class CodeParser(SemiStructuredProcessor):
     def _get_description_prompt(self, content_preview: str) -> str:
         file_name = os.path.basename(self.file_path)
 
-        return f"""请用自然语言描述以下源代码文件，描述将用于语义检索，请包含用户可能搜索的关键信息。
+        return f"""根据以下源代码内容，生成一段用于语义检索的描述文本。
 
 要求：
-- 说明这是什么语言、什么功能的代码（如：Python数据处理模块、Go HTTP服务、React组件等）
-- 包含代码中出现的类名、函数名、模块名、变量名（这些是用户搜索时会用的词）
-- 提及代码依赖的库、框架或包
-- 提及代码处理的业务领域或具体功能
-- 用你向别人介绍这个代码文件时会用的自然语言来写
+- 只输出描述文本本身，不要有任何前缀、解释或格式标记
+- 说明这是什么语言、什么功能的代码（如：Python数据处理模块、Go HTTP服务）
+- 包含代码中出现的类名、函数名、模块名等便于检索的信息
+- 提及代码依赖的库、框架和处理的业务领域
+- 根据代码复杂度灵活调整长度：简单脚本简短描述，复杂项目可详细描述模块结构和功能
 
 文件名：{file_name}
 语言：{self._language}

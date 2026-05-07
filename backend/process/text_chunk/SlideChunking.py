@@ -49,6 +49,9 @@ class SlideChunking(ChunkingStrategy):
         self.include_notes = include_notes
         self.include_title = include_title
 
+    def __str__(self):
+        return f"Slide(max_size={self.max_chunk_size}, min_size={self.min_chunk_size}, notes={'Y' if self.include_notes else 'N'})"
+
     def chunk(self, text: str) -> List[str]:
         """对幻灯片文本进行分块，短幻灯片自动合并"""
         if not text:

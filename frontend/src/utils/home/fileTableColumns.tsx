@@ -90,8 +90,8 @@ export const generateColumns = ({
           menu={{
             items: [
               { key: 'open', label: '打开', icon: <FileOutlined />, onClick: () => onOpenFile(record.path) },
-              { key: 'preview', label: '预览', icon: <EyeOutlined />, onClick: () => onPreview(record), disabled: record.type === 'folder' },
-              { key: 'view-chunk', label: '查看分块', icon: <DatabaseOutlined />, onClick: () => onViewChunk(record), disabled: record.type === 'folder' || !record.content_preview },
+              { key: 'preview', label: '预览分块', icon: <EyeOutlined />, onClick: () => onPreview(record), disabled: record.type === 'folder' },
+              { key: 'view-chunk', label: '命中分块', icon: <DatabaseOutlined />, onClick: () => onViewChunk(record), disabled: record.type === 'folder' || !record.content_preview },
               { key: 'explorer', label: '在资源管理器中打开', icon: <FolderOpenOutlined />, onClick: () => onOpenFolder(record.path) }
             ]
           }}

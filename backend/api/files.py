@@ -36,38 +36,27 @@ async def get_icon(path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/preview")
-def preview_file(path: str):
+def preview_file(path: str, limit: int = 10):
     """
-    預覽文件內容 (僅開發用)
+    預覽文件內容，返回結構化數據
     """
     try:
-        # 只讀取前 10 個 chunk
         result = processor.process_file(path)
         
         if result.get("error"):
-            # 返回 200，前端判斷 error 字段
             return {"error": result.get("error")}
 
         chunks = result.get("chunks", [])
         strategy = result.get("strategy", "Unknown")
         
-        preview_content = f"Chunking Strategy: {strategy}\n"
-        preview_content += f"Total Chunks: {len(chunks)}\n\n"
-        
-        # Format first 10 chunks
-        formatted_chunks = []
-        for i, chunk in enumerate(chunks[:10]):
-            formatted_chunks.append(f"=== Chunk {i+1} ===\n{chunk}")
-            
-        preview_content += "\n\n==============\n\n".join(formatted_chunks)
-        
-        if len(chunks) > 10:
-            preview_content += "\n\n... (更多內容已省略)"
-
+        # 返回結構化數據，前端用UI元素渲染
         return {
-            "content": preview_content,
+            "chunks": chunks[:limit],
+            "total_chunks": len(chunks),
+            "strategy": strategy,
             "meta": result.get("metadata", {}),
-            "type": result.get("type", "")
+            "type": result.get("type", ""),
+            "has_more": len(chunks) > limit
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -124,13 +124,14 @@ class ConfigParser(SemiStructuredProcessor):
     def _get_description_prompt(self, content_preview: str) -> str:
         file_name = os.path.basename(self.file_path)
 
-        return f"""请用自然语言描述以下配置文件，描述将用于语义检索，请包含用户可能搜索的关键信息。
+        return f"""根据以下配置文件内容，生成一段用于语义检索的描述文本。
 
 要求：
-- 说明这是什么系统或应用的什么配置（如：Nginx服务器配置、Spring Boot应用配置、MySQL数据库配置等）
-- 包含配置中出现的具体设置项名称和关键值（如端口号、主机地址、数据库名称，用户可能搜索"8080端口"、"localhost数据库"等）
-- 提及配置中涉及的服务、模块、依赖
-- 用你向别人介绍这个配置文件时会用的自然语言来写
+- 只输出描述文本本身，不要有任何前缀、解释或格式标记
+- 说明这是什么系统或应用的什么配置（如：服务器配置、数据库配置）
+- 包含配置中的关键设置项和值（如端口号、主机地址）
+- 提及配置涉及的服务或模块名称
+- 根据配置复杂度灵活调整长度：简单配置简短描述，包含多个模块复杂配置可详细描述
 
 文件名：{file_name}
 格式：{self._config_type}

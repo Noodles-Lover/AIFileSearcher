@@ -35,6 +35,9 @@ class MDSemanticChunking(ChunkingStrategy):
         self.min_chunk_size = min_chunk_size
         self.max_header_level = max_header_level
 
+    def __str__(self):
+        return f"MDSemantic(max_size={self.max_chunk_size}, min_size={self.min_chunk_size}, max_level=H{self.max_header_level})"
+
     def chunk(self, text: str) -> List[str]:
         """对 Markdown 文本进行语义分块"""
         if not text:

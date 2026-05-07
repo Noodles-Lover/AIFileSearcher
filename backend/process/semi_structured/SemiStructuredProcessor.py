@@ -49,14 +49,18 @@ class SemiStructuredProcessor(BaseFileProcessor):
             完整的提示词字符串
         """
         file_name = os.path.basename(self.file_path)
-        return f"""请为以下文件内容生成简短描述（100字以内）：
+        return f"""根据以下文件内容，生成一段用于语义检索的简短文本描述。
+
+要求：
+- 只输出描述文本本身，不要有任何前缀、解释或格式标记
+- 包含文件内容中的关键名称、术语、字段名、人名等（用户搜索时会输入的词）
+- 用简洁的语句说明文件内容，不要展开解释
+- 长度控制在2-3句话，约80-150字
 
 文件名：{file_name}
 
 内容：
-{content_preview}
-
-请只返回描述文字，不要其他内容。"""
+{content_preview}"""
 
     def _get_fallback_description(self) -> str:
         """
