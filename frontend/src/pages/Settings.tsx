@@ -79,6 +79,7 @@ const Settings: React.FC = () => {
   const [selectedLLMModel, setSelectedLLMModel] = useState('');
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
   const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
+  const [llmAutoFilterEnabled, setLlmAutoFilterEnabled] = useState(true);
   const [selectedIndexType, setSelectedIndexType] = useState('IndexFlatL2');
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
@@ -108,6 +109,7 @@ const Settings: React.FC = () => {
       setSelectedLLMModel(settings.llm_model || '');
       setDeepseekApiKey(settings.deepseek_api_key || '');
       setQueryRewriteEnabled(settings.query_rewrite_enabled || false);
+      setLlmAutoFilterEnabled(settings.llm_auto_filter_enabled !== false);
       setSelectedIndexType(settings.index_type || 'IndexFlatL2');
 
       const [embeddingData, llmData] = await Promise.all([
@@ -244,6 +246,23 @@ const Settings: React.FC = () => {
       message.error('保存查询重写设置失败');
       const settings = await loadSettings(true);
       setQueryRewriteEnabled(settings.query_rewrite_enabled);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleLlmAutoFilterChange = async (checked: boolean) => {
+    setLlmAutoFilterEnabled(checked);
+    setSettingsSaving(true);
+    try {
+      const settings = await saveSettings({ llm_auto_filter_enabled: checked });
+      setLlmAutoFilterEnabled(settings.llm_auto_filter_enabled);
+      message.success('LLM自动过滤设置已保存');
+    } catch (error) {
+      console.error('Failed to save LLM auto filter setting:', error);
+      message.error('保存LLM自动过滤设置失败');
+      const settings = await loadSettings(true);
+      setLlmAutoFilterEnabled(settings.llm_auto_filter_enabled);
     } finally {
       setSettingsSaving(false);
     }
@@ -412,6 +431,24 @@ const Settings: React.FC = () => {
 
               <div style={{ ...styles.rowTop, marginTop: '16px' }}>
                 <div>
+                  <Text strong>索引类型</Text>
+                  <br />
+                  <Text type="secondary" style={styles.secondaryText}>
+                    切换索引类型会清除所有现有索引数据。IndexFlatL2：精确但慢；IndexIVFFlat：快速但需数据量大。
+                  </Text>
+                </div>
+                <Select
+                  value={selectedIndexType}
+                  options={indexTypeOptions}
+                  onChange={handleIndexTypeChange}
+                  style={styles.modelSelect}
+                  placeholder="请选择索引类型"
+                  disabled={settingsSaving}
+                />
+              </div>
+
+              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                <div>
                   <Text strong>LLM 提供商</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
@@ -470,24 +507,6 @@ const Settings: React.FC = () => {
 
               <div style={{ ...styles.rowTop, marginTop: '16px' }}>
                 <div>
-                  <Text strong>索引类型</Text>
-                  <br />
-                  <Text type="secondary" style={styles.secondaryText}>
-                    切换索引类型会清除所有现有索引数据。IndexFlatL2：精确但慢；IndexIVFFlat：快速但需数据量大。
-                  </Text>
-                </div>
-                <Select
-                  value={selectedIndexType}
-                  options={indexTypeOptions}
-                  onChange={handleIndexTypeChange}
-                  style={styles.modelSelect}
-                  placeholder="请选择索引类型"
-                  disabled={settingsSaving}
-                />
-              </div>
-
-              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
-                <div>
                   <Text strong>启用查询重写</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
@@ -498,6 +517,21 @@ const Settings: React.FC = () => {
                   checked={queryRewriteEnabled}
                   onChange={handleQueryRewriteChange}
                   disabled={selectedLLMProvider === 'local' && !selectedLLMModel}
+                />
+              </div>
+
+              <div style={{ ...styles.rowTop, marginTop: '16px' }}>
+                <div>
+                  <Text strong>LLM自动识别过滤范围</Text>
+                  <br />
+                  <Text type="secondary" style={styles.secondaryText}>
+                    启用后，LLM会自动识别并应用文件类型、时间范围、大小范围等过滤条件。
+                  </Text>
+                </div>
+                <Switch
+                  checked={llmAutoFilterEnabled}
+                  onChange={handleLlmAutoFilterChange}
+                  disabled={!queryRewriteEnabled}
                 />
               </div>
             </Spin>

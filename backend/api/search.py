@@ -98,19 +98,58 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
         extensions = set(ext.lower() for ext in file_extensions.split(',')) if file_extensions else None
 
         original_query = q
-        use_query_rewrite = settings_manager.load().get("query_rewrite_enabled", False)
+        llm_filters = None
+        applied_filters = None
+        settings = settings_manager.load()
+        use_query_rewrite = settings.get("query_rewrite_enabled", False)
+        llm_auto_filter_enabled = settings.get("llm_auto_filter_enabled", True)
 
         if use_query_rewrite:
             try:
-                rewritten_query = rewrite_query_with_llm(q)
-                if rewritten_query and rewritten_query.strip():
-                    q = rewritten_query.strip()
-                    print(f"\n{'='*50}")
-                    print(f"🔄 LLM查詢重寫")
-                    print(f"{'='*50}")
-                    print(f"📝 原始查詢: {original_query}")
-                    print(f"✨ 重寫後查詢: {q}")
-                    print(f"{'='*50}\n")
+                rewrite_result = rewrite_query_with_llm(q)
+                if rewrite_result and rewrite_result.get('query'):
+                    q = rewrite_result['query']
+                    llm_filters = {
+                        "extensions": rewrite_result.get("extensions", []),
+                        "time_range": rewrite_result.get("time_range"),
+                        "size_range": rewrite_result.get("size_range")
+                    }
+
+                    # 自动套用LLM识别的过滤器（开启自动过滤时，LLM识别结果始终覆盖前端参数）
+                    if llm_auto_filter_enabled:
+                        applied_filters = {}
+                        if llm_filters["extensions"]:
+                            extensions_str = ','.join(llm_filters["extensions"])
+                            extensions = set(ext.lower() for ext in extensions_str.split(','))
+                            applied_filters["extensions"] = llm_filters["extensions"]
+                            print(f"  🤖 LLM覆蓋文件擴展名: {extensions_str}")
+
+                        if llm_filters["time_range"]:
+                            time_range = llm_filters["time_range"]
+                            if time_range.get("min"):
+                                min_modified = time_range["min"]
+                                applied_filters["min_modified"] = min_modified
+                                print(f"  🤖 LLM覆蓋最小修改時間: {min_modified}")
+                            if time_range.get("max"):
+                                max_modified = time_range["max"]
+                                applied_filters["max_modified"] = max_modified
+                                print(f"  🤖 LLM覆蓋最大修改時間: {max_modified}")
+
+                        if llm_filters["size_range"]:
+                            size_range = llm_filters["size_range"]
+                            if size_range.get("min") is not None:
+                                min_size = size_range["min"]
+                                applied_filters["min_size"] = min_size
+                                print(f"  🤖 LLM覆蓋最小文件大小: {min_size} bytes")
+                            if size_range.get("max") is not None:
+                                max_size = size_range["max"]
+                                applied_filters["max_size"] = max_size
+                                print(f"  🤖 LLM覆蓋最大文件大小: {max_size} bytes")
+
+                        if applied_filters:
+                            print(f"🤖 LLM自動套用過濾條件: {applied_filters}")
+                        else:
+                            print(f"🤖 LLM未識別到有效過濾條件")
                 else:
                     print(f"\n⚠️ LLM返回了空結果，使用原始查詢: {original_query}")
                     q = original_query
@@ -218,7 +257,15 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
             if 'chunk_text' in res and 'content' not in res:
                 res['content'] = res['chunk_text']
 
-        return {"results": final_results}
+        response_data = {"results": final_results}
+
+        # 返回LLM识别的过滤条件
+        if llm_filters:
+            response_data["llm_filters"] = llm_filters
+        if applied_filters:
+            response_data["applied_filters"] = applied_filters
+
+        return response_data
 
     except Exception as e:
         print(f"向量搜索出錯: {e}")

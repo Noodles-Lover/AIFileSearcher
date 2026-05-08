@@ -84,7 +84,8 @@ def apply_filters(
             continue
 
         modified_ts = file_info.get('modified_timestamp', 0)
-        if min_modified:
+        # modified_timestamp=0 表示时间未知，不应用时间过滤
+        if min_modified and modified_ts > 0:
             from datetime import datetime
             try:
                 min_ts = datetime.strptime(min_modified, "%Y-%m-%d").timestamp()
@@ -93,7 +94,7 @@ def apply_filters(
             except ValueError:
                 pass
 
-        if max_modified:
+        if max_modified and modified_ts > 0:
             from datetime import datetime
             try:
                 max_ts = datetime.strptime(max_modified, "%Y-%m-%d").timestamp()
@@ -107,53 +108,96 @@ def apply_filters(
     return filtered
 
 
-def calculate_dynamic_chunk_count(decay_rate: int, total_chunks: int, base_k: int = 30) -> int:
+def calculate_dynamic_chunk_count(k: int, total_chunks: int) -> int:
     """
-    根据衰减率计算动态的chunk数量
+    动态计算需要提取的分块数量
+    使用简单对数函数 y = 7 * log_k(x)
 
     Args:
-        decay_rate: 衰减率，每增加1，搜索的chunk数量减少
+        k: 用户设置的衰减率 (1-10)，会映射到 log_base 1.25-1.55
         total_chunks: 总chunk数量
-        base_k: 基础搜索数量
 
     Returns:
-        实际搜索的chunk数量
+        实际搜索的chunk数量 (范围: 50 到 total_chunks)
     """
-    if total_chunks <= base_k:
-        return total_chunks
+    import math
 
-    k = base_k
-    decay_rate = max(1, decay_rate)
+    if total_chunks <= 0:
+        return 90  # 默认值
 
-    while k < total_chunks:
-        k = k * (decay_rate + 1)
-        if k >= total_chunks:
-            return min(total_chunks, k)
+    # 将用户衰减率1-10映射到log_base=1.25-1.55
+    log_base = 1.25 + (k - 1) * 0.30 / 9
 
-    return min(total_chunks, k)
+    # 使用对数函数: y = 7 * log_k(x)
+    if total_chunks >= 1:
+        extract_count = 7 * math.log(total_chunks, log_base)
+    else:
+        extract_count = 50
+
+    # 四舍五入
+    extract_count = int(round(extract_count))
+
+    # 限制在50到总分块数之间
+    extract_count = max(50, min(total_chunks, extract_count))
+
+    return extract_count
 
 
-QUERY_REWRITE_TEMPLATE = """这是一个语义文件检索系统。你的任务是将用户查询改写为更有利于向量检索的搜索表达。
+QUERY_REWRITE_TEMPLATE = """这是一个语义文件检索系统。你的任务是分析用户查询，提取搜索关键词和过滤条件。
 
-优化目标：
-1. 保留原始核心语义
-2. 扩展相关关键词（同义词、相关术语、常见表达）
-3. 使用“关键词组合”而不是长句解释
-4. 尽量覆盖用户可能想查找的不同表达方式
-5. 避免无关扩展和过度解释
+当前日期：{current_date}
 
-改写要求：
-* 输出应为一个“短语或关键词集合”，可以包含多个表达
-* 不要写成完整解释性句子
-* 不要添加额外说明或前后缀
-* 不要输出多余文本
+你的任务是：
+1. 将用户查询改写为更有利于向量检索的关键词（保留核心语义，扩展同义词）
+2. 识别用户可能想要过滤的条件：
+   - 文件扩展名（extensions）：用户提到的文件类型，如 .pdf, .docx
+   - 修改时间范围（time_range）：用户提到的时间范围，如"最近一周"、"上个月"、"2024年"
+   - 文件大小范围（size_range）：用户提到的文件大小，如"大于1MB"、"小于100KB"
 
-示例：
-用户查询：苹果
-改写输出：苹果 水果 苹果营养 苹果特点 水果营养价值
+输出格式要求：
+必须输出严格的JSON格式，包含以下字段：
+{{
+  "query": "改写后的搜索关键词",
+  "extensions": [] or [".pdf", ".docx"],  // 如果没有提到文件类型，返回空数组
+  "time_range": null or {{"min": "YYYY-MM-DD", "max": "YYYY-MM-DD"}},  // 如果没有提到时间，返回null
+  "size_range": null or {{"min": 字节数, "max": 字节数}}  // 如果没有提到大小，返回null
+}}
 
-用户查询：缓存怎么优化
-改写输出：缓存优化 缓存性能提升 缓存策略 缓存机制 缓存设计
+重要提示：
+- 时间范围判断要宽泛，避免遗漏目标文件
+- 如果用户提供的是模糊时间（如"最近"），请基于当前日期 {current_date} 计算具体日期
+- 文件大小换算：1KB=1024字节，1MB=1048576字节，1GB=1073741824字节
+- 不要添加任何JSON以外的文本、说明或标记
+
+示例1：
+用户查询：最近修改的PDF文件关于机器学习
+输出：
+{{
+  "query": "机器学习 算法 模型 人工智能",
+  "extensions": [".pdf"],
+  "time_range": {{"min": "2024-01-01", "max": "{current_date}"}},
+  "size_range": null
+}}
+
+示例2：
+用户查询：大于1MB的Word文档
+输出：
+{{
+  "query": "Word文档",
+  "extensions": [".docx", ".doc"],
+  "time_range": null,
+  "size_range": {{"min": 1048576, "max": null}}
+}}
+
+示例3：
+用户查询：苹果的营养价值
+输出：
+{{
+  "query": "苹果 水果 营养 健康 维生素",
+  "extensions": [],
+  "time_range": null,
+  "size_range": null
+}}
 
 ---
 
@@ -162,23 +206,83 @@ QUERY_REWRITE_TEMPLATE = """这是一个语义文件检索系统。你的任务�
 """
 
 
-def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> str:
+def parse_rewrite_response(response: str) -> Dict[str, Any]:
     """
-    使用 LLM 重写查询
+    解析LLM返回的重写响应，提取JSON数据
+
+    Args:
+        response: LLM返回的字符串
+
+    Returns:
+        包含query, extensions, time_range, size_range的字典
+    """
+    import json
+    import re
+
+    default_result = {
+        "query": response.strip(),
+        "extensions": [],
+        "time_range": None,
+        "size_range": None
+    }
+
+    try:
+        # 尝试直接解析JSON
+        result = json.loads(response.strip())
+        if isinstance(result, dict):
+            return {
+                "query": result.get("query", response.strip()),
+                "extensions": result.get("extensions", []),
+                "time_range": result.get("time_range"),
+                "size_range": result.get("size_range")
+            }
+    except json.JSONDecodeError:
+        pass
+
+    # 如果直接解析失败，尝试提取JSON块
+    json_match = re.search(r'\{[\s\S]*\}', response)
+    if json_match:
+        try:
+            result = json.loads(json_match.group(0))
+            if isinstance(result, dict):
+                return {
+                    "query": result.get("query", response.strip()),
+                    "extensions": result.get("extensions", []),
+                    "time_range": result.get("time_range"),
+                    "size_range": result.get("size_range")
+                }
+        except json.JSONDecodeError:
+            pass
+
+    # 解析失败，返回原始响应作为query
+    print(f"⚠️ LLM响应JSON解析失败，使用原始响应作为查询")
+    return default_result
+
+
+def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> Dict[str, Any]:
+    """
+    使用 LLM 重写查询，并返回结构化数据
 
     Args:
         query: 用户查询
         use_deepseek: 是否使用 DeepSeek API (True=API, False=本地模型)
+
+    Returns:
+        包含query, extensions, time_range, size_range的字典
     """
+    from datetime import datetime
+
     try:
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
         if use_deepseek:
             # 使用 DeepSeek API
             from backend.RAG.DeepSeekLLM import DeepSeekLLM
             llm = DeepSeekLLM()
-            prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date)
             rewritten = llm.generate(
                 prompt=prompt,
-                max_tokens=256,
+                max_tokens=512,
                 temperature=0.7,
                 top_p=0.9,
             )
@@ -194,16 +298,32 @@ def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> str:
             sm.load_llm(model_name=llm_model)
             llm = sm.get_llm()
 
-            prompt = QUERY_REWRITE_TEMPLATE.format(query=query)
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date)
             rewritten = llm.generate(
                 prompt=prompt,
                 system_prompt="",
-                max_new_tokens=256,
+                max_new_tokens=512,
                 temperature=0.7,
                 top_p=0.9,
             )
 
-        return rewritten.strip()
+        # 解析LLM返回的JSON响应
+        result = parse_rewrite_response(rewritten)
+
+        print(f"\n{'='*50}")
+        print(f"🔄 LLM查詢重寫")
+        print(f"{'='*50}")
+        print(f"📝 原始查詢: {query}")
+        print(f"✨ 重寫後查詢: {result['query']}")
+        if result['extensions']:
+            print(f"📎 識別文件類型: {', '.join(result['extensions'])}")
+        if result['time_range']:
+            print(f"📅 識別時間範圍: {result['time_range']}")
+        if result['size_range']:
+            print(f"📊 識別大小範圍: {result['size_range']}")
+        print(f"{'='*50}\n")
+
+        return result
 
     except Exception as e:
         raise RuntimeError(f"LLM 调用失败: {str(e)}")

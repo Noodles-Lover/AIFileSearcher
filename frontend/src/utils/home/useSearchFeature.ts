@@ -4,6 +4,19 @@ import { message } from 'antd';
 import type { FileItem } from '../../components/FileIcon';
 import { API_ENDPOINTS, apiGet, apiPost } from '../api';
 import { convertSizeToBytes, getRelativePath, processSemanticSearchResults } from '../fileUtils';
+import { loadSettings } from '../settingsManager';
+
+interface LLMFilters {
+  extensions?: string[];
+  time_range?: {
+    min?: string;
+    max?: string;
+  } | null;
+  size_range?: {
+    min?: number;
+    max?: number;
+  } | null;
+}
 
 interface FolderResponse {
   path?: string;
@@ -91,6 +104,24 @@ export function useSearchFeature() {
     cachedState?.filterDateRange?.[0] ? dayjs(cachedState.filterDateRange[0]) : null,
     cachedState?.filterDateRange?.[1] ? dayjs(cachedState.filterDateRange[1]) : null,
   ]);
+
+  // LLM识别的过滤条件
+  const [llmFilters, setLlmFilters] = useState<LLMFilters | null>(null);
+  const [appliedFilters, setAppliedFilters] = useState<Record<string, any> | null>(null);
+  const [llmAutoFilterEnabled, setLlmAutoFilterEnabled] = useState(true);  // 与全局设置同步
+
+  // 加载全局设置中的LLM自动过滤开关状态
+  useEffect(() => {
+    const loadSetting = async () => {
+      try {
+        const settings = await loadSettings();
+        setLlmAutoFilterEnabled(settings.llm_auto_filter_enabled !== false);
+      } catch (error) {
+        console.error('Failed to load LLM auto filter setting:', error);
+      }
+    };
+    loadSetting();
+  }, []);
 
   useEffect(() => {
     try {
@@ -190,6 +221,82 @@ export function useSearchFeature() {
 
       if (data.msg) {
         message.warning(data.msg);
+      }
+
+      // 解析LLM识别的过滤条件
+      if (data.llm_filters && llmAutoFilterEnabled) {
+        setLlmFilters(data.llm_filters);
+
+        // 将LLM识别的条件直接填充到过滤弹窗的输入栏内（覆盖所有字段）
+        const llmFilters = data.llm_filters;
+
+        // 文件扩展名 - 始终覆盖
+        if (llmFilters.extensions && llmFilters.extensions.length > 0) {
+          setFilterExtensions(llmFilters.extensions.join(' '));
+        } else {
+          setFilterExtensions('');
+        }
+
+        // 时间范围 - 始终覆盖
+        const dates: [any, any] = [null, null];
+        if (llmFilters.time_range) {
+          if (llmFilters.time_range.min) {
+            dates[0] = dayjs(llmFilters.time_range.min);
+          }
+          if (llmFilters.time_range.max) {
+            dates[1] = dayjs(llmFilters.time_range.max);
+          }
+        }
+        setFilterDateRange(dates);
+
+        // 文件大小 - 始终覆盖
+        // min_size
+        if (llmFilters.size_range && llmFilters.size_range.min !== undefined && llmFilters.size_range.min !== null) {
+          const sizeInMB = llmFilters.size_range.min / 1048576;
+          if (sizeInMB >= 1024) {
+            setFilterMinSize(sizeInMB / 1024);
+            setFilterMinSizeUnit('GB');
+          } else if (sizeInMB >= 1) {
+            setFilterMinSize(sizeInMB);
+            setFilterMinSizeUnit('MB');
+          } else if (llmFilters.size_range.min >= 1024) {
+            setFilterMinSize(llmFilters.size_range.min / 1024);
+            setFilterMinSizeUnit('KB');
+          } else {
+            setFilterMinSize(llmFilters.size_range.min);
+            setFilterMinSizeUnit('B');
+          }
+        } else {
+          setFilterMinSize(null);
+          setFilterMinSizeUnit('B');
+        }
+
+        // max_size
+        if (llmFilters.size_range && llmFilters.size_range.max !== undefined && llmFilters.size_range.max !== null) {
+          const sizeInMB = llmFilters.size_range.max / 1048576;
+          if (sizeInMB >= 1024) {
+            setFilterMaxSize(sizeInMB / 1024);
+            setFilterMaxSizeUnit('GB');
+          } else if (sizeInMB >= 1) {
+            setFilterMaxSize(sizeInMB);
+            setFilterMaxSizeUnit('MB');
+          } else if (llmFilters.size_range.max >= 1024) {
+            setFilterMaxSize(llmFilters.size_range.max / 1024);
+            setFilterMaxSizeUnit('KB');
+          } else {
+            setFilterMaxSize(llmFilters.size_range.max);
+            setFilterMaxSizeUnit('B');
+          }
+        } else {
+          setFilterMaxSize(null);
+          setFilterMaxSizeUnit('B');
+        }
+
+        setAppliedFilters(data.applied_filters);
+        message.info('LLM已自动填充过滤条件，您可以直接修改');
+      } else {
+        setLlmFilters(null);
+        setAppliedFilters(null);
       }
 
       const mappedFiles = processSemanticSearchResults(data.results, path);
@@ -315,6 +422,10 @@ export function useSearchFeature() {
     setFilterMaxSizeUnit,
     filterDateRange,
     setFilterDateRange,
+    llmFilters,
+    appliedFilters,
+    llmAutoFilterEnabled,
+    setLlmAutoFilterEnabled,
     handleSearch,
     handlePickFolder,
     handleSetFolder,

@@ -12,6 +12,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "llm_model": "",          # 本地模型名称
     "deepseek_api_key": "",   # DeepSeek API Key
     "query_rewrite_enabled": False,
+    "llm_auto_filter_enabled": True,  # LLM自动识别并应用过滤范围
     "index_type": "IndexFlatL2",
 }
 

@@ -5,6 +5,7 @@ export interface AppSettings {
   llm_model: string;
   deepseek_api_key: string;
   query_rewrite_enabled: boolean;
+  llm_auto_filter_enabled: boolean;  // LLM自动识别并应用过滤范围
 }
 
 const SETTINGS_STORAGE_KEY = 'ai-file-searcher-settings';
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   llm_model: '',
   deepseek_api_key: '',
   query_rewrite_enabled: false,
+  llm_auto_filter_enabled: true,  // 默认开启LLM自动过滤
 };
 
 type FileBridge = {

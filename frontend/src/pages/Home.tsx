@@ -11,6 +11,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Table,
   Tag,
   Typography
@@ -29,6 +30,7 @@ import { generateColumns } from '../utils/home/fileTableColumns';
 import { useIndexingFeature } from '../utils/home/useIndexingFeature';
 import { usePreviewFeature } from '../utils/home/usePreviewFeature';
 import { useSearchFeature } from '../utils/home/useSearchFeature';
+import { saveSettings } from '../utils/settingsManager';
 import '../styles/progress.css';
 
 const { Header, Content } = Layout;
@@ -343,6 +345,24 @@ const Home: React.FC = () => {
         placement="center"
       >
         <Space direction="vertical" style={styles.fullWidth} size="middle">
+          {/* LLM自动识别过滤范围 - 与全局设置同步 */}
+          <div style={styles.row}>
+            <div>
+              <Text strong>LLM自动识别过滤范围</Text>
+              <br />
+              <Text type="secondary" style={styles.secondaryText}>
+                启用后，LLM会自动识别并填充文件类型、时间范围、大小范围
+              </Text>
+            </div>
+            <Switch
+              checked={search.llmAutoFilterEnabled}
+              onChange={async (checked) => {
+                search.setLlmAutoFilterEnabled(checked);
+                await saveSettings({ llm_auto_filter_enabled: checked });
+              }}
+            />
+          </div>
+
           <div>
             <Text strong>文件扩展名</Text>
             <Input
