@@ -1,4 +1,5 @@
 import os
+import torch
 import numpy as np
 from typing import Any, List, Union
 from sentence_transformers import SentenceTransformer
@@ -7,17 +8,25 @@ from backend.utils.path_utils import get_embedding_models_path
 class EmbeddingModel:
     """
     Embedding model class for text vectorization
+    Supports automatic GPU detection for acceleration.
     """
-    def __init__(self, model_name: str = "bge-m3", device: str = "cpu"):
+    def __init__(self, model_name: str = "bge-m3", device: str = None):
         """
         Initialize embedding model
         :param model_name: Model name or path
-        :param device: Running device (cpu/cuda)
+        :param device: Running device (cpu/cuda). If None, auto-detect GPU.
         """
+        # Auto-detect GPU if device not specified
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        self.device = device
+        
         # Build local model path
         local_model_path = get_embedding_models_path(model_name)
         
         print(f"Checking local model path: {local_model_path}")
+        print(f"Embedding model using device: {device}")
         
         if os.path.exists(local_model_path):
             model_path = local_model_path
@@ -27,7 +36,6 @@ class EmbeddingModel:
             print(f"Loading remote model: {model_path}")
         
         self.model = SentenceTransformer(model_path, device=device)
-        self.device = device
     
     def encode(self, texts: Union[str, List[str]]) -> List[List[float]]:
         """

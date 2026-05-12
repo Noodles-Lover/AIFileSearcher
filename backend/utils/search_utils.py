@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 
 from backend.RAG.SystemManager import SystemManager
 from backend.utils.settings_manager import settings_manager
+from datetime import datetime, timedelta
 
 
 def format_size(size_bytes: int) -> str:
@@ -165,35 +166,38 @@ QUERY_REWRITE_TEMPLATE = """这是一个语义文件检索系统。你的任务�
 
 重要提示：
 - 时间范围判断要宽泛，避免遗漏目标文件
-- 如果用户提供的是模糊时间（如"最近"），请基于当前日期 {current_date} 计算具体日期
+- 模糊时间计算规则（基于当前日期 {current_date}）：
+  * "最近"或"近期"：往前推6个月
+  * "今年"：从当年1月1日开始
 - 文件大小换算：1KB=1024字节，1MB=1048576字节，1GB=1073741824字节
+- 查询词改写规则：保留核心语义，扩展同义词和相关术语，避免使用过于宽泛的词汇（如"算法""模型"），应改写为更具体的术语
 - 不要添加任何JSON以外的文本、说明或标记
 
-示例1：
-用户查询：最近修改的PDF文件关于机器学习
+示例1（含时间范围）：
+用户查询：最近修改的PDF文件关于神经网络训练
 输出：
 {{
-  "query": "机器学习 算法 模型 人工智能",
+  "query": "神经网络 训练方法 反向传播 梯度下降 深度学习",
   "extensions": [".pdf"],
-  "time_range": {{"min": "2024-01-01", "max": "{current_date}"}},
+  "time_range": {{"min": "{date_6months_ago}", "max": "{current_date}"}},
   "size_range": null
 }}
 
-示例2：
-用户查询：大于1MB的Word文档
+示例2（含文件大小）：
+用户查询：找关于项目进度汇报的PPT，大小超过2MB
 输出：
 {{
-  "query": "Word文档",
-  "extensions": [".docx", ".doc"],
+  "query": "项目进度 汇报 里程碑 完成情况 时间线",
+  "extensions": [".pptx", ".ppt"],
   "time_range": null,
-  "size_range": {{"min": 1048576, "max": null}}
+  "size_range": {{"min": 2097152, "max": null}}
 }}
 
-示例3：
-用户查询：苹果的营养价值
+示例3（纯语义查询）：
+用户查询：苹果公司的产品发布会
 输出：
 {{
-  "query": "苹果 水果 营养 健康 维生素",
+  "query": "Apple 苹果公司 产品发布 iPhone Mac 发布会 新品",
   "extensions": [],
   "time_range": null,
   "size_range": null
@@ -270,16 +274,18 @@ def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> Dict[str, A
     Returns:
         包含query, extensions, time_range, size_range的字典
     """
-    from datetime import datetime
 
     try:
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        now = datetime.now()
+        current_date = now.strftime("%Y-%m-%d")
+        # 计算6个月前的日期（按180天近似）
+        date_6months_ago = (now - timedelta(days=180)).strftime("%Y-%m-%d")
 
         if use_deepseek:
             # 使用 DeepSeek API
             from backend.RAG.DeepSeekLLM import DeepSeekLLM
             llm = DeepSeekLLM()
-            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date)
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date, date_6months_ago=date_6months_ago)
             rewritten = llm.generate(
                 prompt=prompt,
                 max_tokens=512,
@@ -298,7 +304,7 @@ def rewrite_query_with_llm(query: str, use_deepseek: bool = True) -> Dict[str, A
             sm.load_llm(model_name=llm_model)
             llm = sm.get_llm()
 
-            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date)
+            prompt = QUERY_REWRITE_TEMPLATE.format(query=query, current_date=current_date, min_date_6months_ago=min_date_6months_ago)
             rewritten = llm.generate(
                 prompt=prompt,
                 system_prompt="",

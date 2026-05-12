@@ -70,7 +70,6 @@ class VectorStore:
         self.metadata_path = metadata_path
         self.index_type = index_type
         self.metadata: List[Dict[str, Any]] = []
-        self._deleted_indices: set = set()  # 标记删除的索引
 
         self.index = create_index(index_type, dimension)
         self.load()
@@ -131,55 +130,40 @@ class VectorStore:
 
     def remove_vectors_by_indices(self, indices: List[int]):
         """
-        根据索引列表删除向量（标记删除模式）
+        根据索引列表删除向量
         
-        对于不支持 reconstruct_batch 的索引类型（LSH），
-        采用标记删除而非物理删除，避免索引退化
+        使用 FAISS 的 remove_ids 函数进行物理删除。
+        对于 IndexLSH，不支持删除操作，会抛出异常。
         """
         if not indices or self.index.ntotal == 0:
-            return
+            return 0
 
         try:
-            # 检查是否支持 reconstruct_batch
-            supports_reconstruct = (
-                type(self.index).__name__ in ('IndexFlatL2', 'IndexFlatIP', 'IndexIVFFlat', 
-                                                'IndexHNSWFlat') or
-                hasattr(self.index, 'reconstruct_batch')
-            )
+            # IndexLSH 不支持删除操作
+            if self.index_type == "IndexLSH":
+                raise NotImplementedError(
+                    f"⚠️ {self.index_type} 不支持删除操作。\n"
+                    f"   建议：清除索引后重新向量化"
+                )
+
+            # 使用 FAISS 的 remove_ids 函数删除向量
+            indices_np = np.array(indices).astype('int64')
+            self.index.remove_ids(indices_np)
             
+            # 更新 metadata：从后往前删除，避免索引前移问题
             indices_set = set(indices)
-            
-            if supports_reconstruct:
-                # 支持重建的索引：物理删除
-                indices_to_keep = [i for i in range(self.index.ntotal) if i not in indices_set]
-                
-                if indices_to_keep:
-                    vectors_to_keep = self.index.reconstruct_batch(indices_to_keep)
-                    metadata_to_keep = [self.metadata[i] for i in indices_to_keep]
-                    
-                    if len(vectors_to_keep) >= 4 and self.index_type.startswith("IndexIVF"):
-                        self.index = create_index(self.index_type, self.dimension)
-                        if hasattr(self.index, 'is_trained') and not self.index.is_trained:
-                            self.index.train(vectors_to_keep)
-                    else:
-                        self.index = create_index(self.index_type, self.dimension)
-                    self.index.add(vectors_to_keep)
-                    
-                    self.metadata = metadata_to_keep
-                    self._deleted_indices.clear()
-                else:
-                    self.index = create_index(self.index_type, self.dimension)
-                    self.metadata = []
-                    self._deleted_indices.clear()
-            else:
-                # 不支持重建的索引：标记删除
-                self._deleted_indices.update(indices_set)
-                print(f"⚠️ {self.index_type} 不支持物理删除，已标记 {len(indices)} 个向量待后续重建")
+            for i in sorted(indices_set, reverse=True):
+                if i < len(self.metadata):
+                    del self.metadata[i]
 
             self.save()
+            print(f"✅ 已删除 {len(indices)} 个向量")
             return len(indices)
+        except NotImplementedError:
+            raise  # 重新抛出 NotImplementedError
         except Exception as e:
             print(f"⚠️ 删除向量失败: {e}")
+            return 0
 
     def remove_vectors_by_file(self, file_path: str) -> int:
         """
@@ -208,25 +192,15 @@ class VectorStore:
             )
         try:
             query_np = np.array([query_vector]).astype('float32')
-
-            # 如果有标记删除的索引，检索更多结果以过滤
-            actual_k = k
-            if self._deleted_indices:
-                actual_k = min(k * 3, self.index.ntotal)  # 多检索一些以便过滤
             
-            D, I = self.index.search(query_np, actual_k)
+            D, I = self.index.search(query_np, k)
 
             results = []
             for i, idx in enumerate(I[0]):
                 if idx != -1 and idx < len(self.metadata):
-                    # 跳过被标记删除的向量
-                    if idx in self._deleted_indices:
-                        continue
                     item = self.metadata[idx].copy()
                     item['score'] = float(D[0][i])
                     results.append(item)
-                    if len(results) >= k:
-                        break
 
             return results
         except Exception as e:
@@ -259,7 +233,6 @@ class VectorStore:
         index_info = {
             "index_type": self.index_type,
             "dimension": self.dimension,
-            "deleted_indices": list(self._deleted_indices),  # 保存删除标记
         }
         faiss.write_index(self.index, self.index_path)
         with open(self.metadata_path, 'w', encoding='utf-8') as f:
@@ -280,21 +253,16 @@ class VectorStore:
                     with open(info_path, 'r', encoding='utf-8') as f:
                         info = json.load(f)
                     self.index_type = info.get("index_type", "IndexFlatL2")
-                    # 加载删除标记
-                    self._deleted_indices = set(info.get("deleted_indices", []))
 
                 with open(self.metadata_path, 'r', encoding='utf-8') as f:
                     self.metadata = json.load(f)
                     
-                deleted_count = len(self._deleted_indices)
-                print(f"向量存儲已加載: {self.index.ntotal} 個向量，指數類型: {self.index_type}"
-                      + (f"，已標記刪除: {deleted_count}" if deleted_count > 0 else ""))
+                print(f"向量存儲已加載: {self.index.ntotal} 個向量，指數類型: {self.index_type}")
             except Exception as e:
                 print(f"加載向量存儲時出錯: {e}")
                 print("重建索引...")
                 self.index = create_index(self.index_type, self.dimension)
                 self.metadata = []
-                self._deleted_indices = set()
                 self.save()
         else:
             print("向量存儲文件不存在，將創建新的索引")
@@ -305,44 +273,5 @@ class VectorStore:
         """清除所有索引和元数据"""
         self.index = create_index(self.index_type, self.dimension)
         self.metadata = []
-        self._deleted_indices = set()
         self.save()
         print("索引已清除")
-    
-    def rebuild_index(self):
-        """
-        重建索引：物理删除所有标记的向量（针对 IndexLSH 等不支持重建的索引）
-        """
-        if not self._deleted_indices:
-            print("无需重建索引")
-            return
-        
-        if self.index_type == "IndexLSH":
-            # IndexLSH 不支持 reconstruct，需要用户重新向量化
-            print(f"⚠️ {self.index_type} 不支持物理重建，请重新索引")
-            print(f"   待删除向量数: {len(self._deleted_indices)}")
-            print(f"   建议：清除索引后重新索引进度")
-            return
-        
-        # 支持重建的索引类型，物理删除
-        try:
-            indices_to_keep = [i for i in range(self.index.ntotal) if i not in self._deleted_indices]
-            
-            if indices_to_keep:
-                vectors_to_keep = self.index.reconstruct_batch(indices_to_keep)
-                metadata_to_keep = [self.metadata[i] for i in indices_to_keep]
-                
-                self.index = create_index(self.index_type, self.dimension)
-                if hasattr(self.index, 'is_trained') and not self.index.is_trained:
-                    self.index.train(vectors_to_keep)
-                self.index.add(vectors_to_keep)
-                self.metadata = metadata_to_keep
-            else:
-                self.index = create_index(self.index_type, self.dimension)
-                self.metadata = []
-            
-            self._deleted_indices.clear()
-            self.save()
-            print(f"索引重建完成: {len(self.metadata)} 個向量")
-        except Exception as e:
-            print(f"重建索引失败: {e}")
