@@ -28,57 +28,146 @@
 
 ## 🚀 快速开始
 
-### 1. 环境准备
+### 方式一：使用批处理脚本（推荐）
 
-- **Node.js 16+** (前端)
-- **Python 3.10+** (后端)
-- **Everything** (可选，用于文件名搜索)
+项目提供了三个批处理脚本，简化安装和启动流程：
 
-### 2. 安装依赖
+1. **`init.bat`** - 初始化项目（检查环境、安装前端依赖、创建 Python 虚拟环境、安装后端依赖）
+2. **`init_models.bat`** - 下载 AI 模型（嵌入模型或 LLM 模型）
+3. **`start_app.bat`** - 启动应用（前端开发服务器 + 后端应用）
 
+**操作步骤**：
 ```bash
-# 前端
-cd frontend && npm install
+# 1. 初始化项目（首次运行）
+init.bat
 
-# 后端
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+# 2. 下载模型（首次运行）
+init_models.bat
+
+# 3. 启动应用
+start_app.bat
 ```
 
-### 3. 启动应用
+**脚本详细说明**：
 
-```bash
-# 启动后端（桌面应用入口）
-cd backend
-.\venv\Scripts\Activate.ps1
-python gui/main.py
-```
+#### `init.bat` - 项目初始化
+- **功能**：检查 Node.js/Python 环境 → 安装前端依赖 → 创建 Python 虚拟环境 → 安装后端依赖
+- **镜像源**：自动使用清华大学镜像源加速下载
+- **耗时**：首次运行可能需要 5-30 分钟（取决于网络和电脑性能）
 
-前端会在桌面应用中自动加载，无需单独启动。
+#### `init_models.bat` - 模型下载
+- **功能**：下载 AI 模型（嵌入模型或 LLM 模型）
+- **模型选择**：
+  - 嵌入模型：推荐 `bge-small-zh-v1.5`（体积小，适合新手）
+  - LLM 模型：推荐 `qwen2:1.5b`（需 2GB+ 磁盘空间）
+
+#### `start_app.bat` - 启动应用
+- **功能**：启动前端开发服务器（新窗口）→ 等待 5 秒 → 启动后端应用
+- **说明**：前端在新命令窗口运行，后端在主窗口运行
+- **退出**：关闭后端窗口或按 Ctrl+C 停止应用
+
+**注意事项**：
+- 如果 `init.bat` 失败，请查看错误信息，通常是网络问题或环境缺失
+- 如果 `init_models.bat` 下载失败，可以手动从 HuggingFace 下载模型放到 `models/` 目录
+- 如果 `start_app.bat` 启动失败，请检查前端是否已启动（`http://localhost:5173`）
 
 ---
 
-## 💻 技术栈
 
-### 前端
-- React 18 + TypeScript
-- Vite (构建工具)
-- Ant Design (UI 组件库)
+### 方式二：手动安装
 
-### 后端
-- Python 3.10+ / FastAPI
-- PyQt6 (桌面 GUI)
-- SentenceTransformers (向量嵌入)
-- FAISS (向量搜索)
-- Transformers (LLM 推理)
+#### 1. 环境准备
 
-### 文件处理
-- PyMuPDF (PDF 解析)
-- python-docx (Word 解析)
-- python-pptx (PPT 解析)
-- openpyxl (Excel 解析)
+- **Node.js 16+** (前端)
+- **Python 3.10+** (后端)
+
+#### 2. 安装依赖
+
+**前端** (终端 1):
+```bash
+cd frontend
+npm install
+npm run dev  # 启动 Vite 开发服务器 (http://localhost:5173)
+```
+
+> **重要**: 保持此终端运行，不要关闭。桌面应用需要连接此开发服务器。
+
+**后端** (终端 2):
+```bash
+cd backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1  # Windows PowerShell
+pip install -r requirements.txt
+```
+
+#### 3. 下载模型
+
+后端需要嵌入模型才能工作。首次运行前需下载模型：
+
+```bash
+# 在后端终端中（保持虚拟环境激活）
+python download_model.py
+```
+
+- 选择 `1` (嵌入模型)
+- 推荐选择 `1` (BAAI/bge-small-zh-v1.5) - 适合新手，体积小
+- 等待下载完成（可能需要几分钟，取决于网络速度）
+
+> **注意**: 如果下载失败，请检查网络连接。如需使用代理，请配置 `HF_ENDPOINT` 环境变量。
+
+#### 4. 启动应用
+
+```bash
+# 在后端终端中（保持虚拟环境激活）
+python gui/main.py
+```
+
+这将启动：
+- 后端 API 服务器（http://127.0.0.1:8000）
+- PyQt6 桌面应用窗口
+
+#### 5. 验证安装
+
+1. 桌面应用窗口应自动打开
+2. 在设置页面确认嵌入模型已加载（显示模型名称）
+3. 尝试建立索引：选择一个文件夹，点击"建立索引"
+
+---
+
+## 💻 GPU 加速配置（可选）
+
+默认安装的 PyTorch 是 CUDA 12.1 版本。如果您有 NVIDIA GPU 且已安装 CUDA Toolkit 12.1+，将自动启用 GPU 加速。
+
+### 检查 GPU 状态
+
+```bash
+# 在后端虚拟环境中运行
+python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
+```
+
+如果显示 `CUDA available: False`，可能原因：
+- 未安装 NVIDIA 驱动
+- 未安装 CUDA Toolkit 12.1+
+- 或您使用的是 CPU 版本 Windows
+
+### 安装 CUDA Toolkit（如需要）
+
+访问 [NVIDIA CUDA Toolkit 下载页面](https://developer.nvidia.com/cuda-toolkit-archive) 下载并安装 CUDA 12.1。
+
+安装完成后，重启电脑，再次运行检查命令。
+
+### 切换到 CPU 版本（如需要）
+
+如果您的电脑没有 NVIDIA GPU，可以切换到 CPU 版本：
+
+```bash
+# 在后端目录中运行
+.\venv\Scripts\activate
+pip uninstall torch torchvision torchaudio -y
+pip install torch torchvision torchaudio
+```
+
+> **注意**: CPU 版本运行速度较慢，但兼容所有电脑。
 
 ---
 
@@ -118,38 +207,76 @@ python gui/main.py
 
 ---
 
+
+## 🐛 故障排除
+
+### 安装与启动问题
+
+**1. `init.bat` 运行失败**
+- **问题**：pip 安装依赖失败（SSL 错误、代理错误等）
+- **解决**：
+  - 尝试不使用代理（选择 `N`）
+  - 或检查代理地址是否正确（如 `http://127.0.0.1:7890`）
+  - 或手动安装：进入 `backend` 目录，运行 `venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple`
+
+**2. `init_models.bat` 或 `python download_model.py` 下载模型失败**
+- **问题**：无法从 HuggingFace 下载模型
+- **解决**：
+  - 检查网络连接
+  - 使用代理（运行 `init_models.bat` 时选择 `Y` 并输入代理地址）
+  - 或手动下载：从 [HuggingFace](https://huggingface.co) 下载模型，放到 `models/embedding/` 或 `models/LLM/` 目录
+
+**3. `start_app.bat` 启动失败或前端空白**
+- **问题**：后端启动失败或前端无法加载
+- **解决**：
+  - 检查前端是否启动（`http://localhost:5173`）
+  - 查看后端错误信息
+  - 或手动启动：进入 `backend` 目录，运行 `venv\Scripts\python.exe gui/main.py`
+
+### 运行时问题
+
+**4. 模型加载失败**
+- 确认模型文件在 `models/embedding/` 或 `models/LLM/` 目录
+- 检查模型完整性（推荐使用 `safetensors` 格式）
+- 确认内存充足（建议 8GB+）
+- 查看后端日志中的具体错误信息
+
+**5. GPU 未启用**
+- 参考 [GPU 加速配置](#-gpu-加速配置可选) 部分
+- 确认安装了 CUDA 版本的 PyTorch
+- 运行 `python -c "import torch; print(torch.cuda.is_available())"` 检查
+
+
+---
+
+## 💻 技术栈
+
+### 前端
+- React 19 + TypeScript
+- Vite (构建工具)
+- Ant Design (UI 组件库)
+
+### 后端
+- Python 3.10+ / FastAPI
+- PyQt6 (桌面 GUI)
+- SentenceTransformers (向量嵌入)
+- FAISS (向量搜索)
+- Transformers (LLM 推理)
+
+### 文件处理
+- PyMuPDF (PDF 解析)
+- python-docx (Word 解析)
+- python-pptx (PPT 解析)
+- openpyxl (Excel 解析)
+
+---
+
 ## 📚 文档
 
 - **[开发指南](DEVELOP.md)** - 项目架构与开发说明
 - **[后端开发指南](backend/DEVELOPMENT.md)** - Python 后端开发说明
 - **[RAG 模块文档](backend/RAG/DEVELOPMENT.md)** - RAG 核心模块详细说明
 - **[文件处理文档](backend/process/ProcessDocs.md)** - 文件处理模块详细说明
-
----
-
-## 🐛 故障排除
-
-### 常见问题
-
-**1. 模型加载失败**
-- 确认模型文件在 `models/` 目录
-- 检查模型完整性（推荐使用 `safetensors` 格式）
-- 确认内存充足（建议 8GB+）
-
-**2. 索引进度不更新**
-- 检查后端日志
-- 确认 SSE 连接正常
-- 重启后端服务
-
-**3. 搜索结果不准确**
-- 尝试重新建立索引
-- 检查文件是否被正确解析
-- 调整搜索关键词
-
-**4. GPU 未启用**
-- 确认安装了 CUDA 版本的 PyTorch（非 CPU 版本）
-- 运行 `python -c "import torch; print(torch.cuda.is_available())"` 检查
-- 如果显示 `False`，需要重新安装 CUDA 版本的 PyTorch
 
 ---
 

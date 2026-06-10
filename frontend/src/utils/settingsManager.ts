@@ -6,6 +6,7 @@ export interface AppSettings {
   deepseek_api_key: string;
   query_rewrite_enabled: boolean;
   llm_auto_filter_enabled: boolean;  // LLM自动识别并应用过滤范围
+  index_type: string;  // FAISS索引类型
 }
 
 const SETTINGS_STORAGE_KEY = 'ai-file-searcher-settings';
@@ -13,12 +14,13 @@ const SETTINGS_FILE_PATH = 'local_data/settings.json';
 
 const DEFAULT_SETTINGS: AppSettings = {
   include_subfolders: false,
-  embedding_model: 'bge-m3',
+  embedding_model: '',
   llm_provider: 'local',
   llm_model: '',
   deepseek_api_key: '',
   query_rewrite_enabled: false,
   llm_auto_filter_enabled: true,  // 默认开启LLM自动过滤
+  index_type: 'IndexFlatL2',  // 默认FAISS索引类型
 };
 
 type FileBridge = {

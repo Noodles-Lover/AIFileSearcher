@@ -7,7 +7,7 @@ from .path_utils import get_data_path
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "include_subfolders": False,
-    "embedding_model": "bge-m3",
+    "embedding_model": "",  # 默认为空，无模型时不自动选择
     "llm_provider": "local",  # "local" 或 "deepseek"
     "llm_model": "",          # 本地模型名称
     "deepseek_api_key": "",   # DeepSeek API Key

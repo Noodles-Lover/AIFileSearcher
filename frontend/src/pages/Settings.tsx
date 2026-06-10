@@ -24,7 +24,7 @@ import {
 
 import SettingSection from '../components/SettingSection';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
-import { listEmbeddingModels, listLLMModels, loadSettings, saveSettings } from '../utils/settingsManager';
+import { loadSettings, saveSettings } from '../utils/settingsManager';
 
 interface ApiResponse {
   success?: boolean;
@@ -73,7 +73,7 @@ const Settings: React.FC = () => {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [includeSubfolders, setIncludeSubfolders] = useState(false);
   const [availableEmbeddingModels, setAvailableEmbeddingModels] = useState<string[]>([]);
-  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('bge-m3');
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('');
   const [availableLLMModels, setAvailableLLMModels] = useState<string[]>([]);
   const [selectedLLMProvider, setSelectedLLMProvider] = useState<'local' | 'deepseek'>('local');
   const [selectedLLMModel, setSelectedLLMModel] = useState('');
@@ -104,7 +104,7 @@ const Settings: React.FC = () => {
     try {
       const settings = await loadSettings(true);
       setIncludeSubfolders(settings.include_subfolders);
-      setSelectedEmbeddingModel(settings.embedding_model || 'bge-m3');
+      setSelectedEmbeddingModel(settings.embedding_model || '');
       setSelectedLLMProvider(settings.llm_provider || 'local');
       setSelectedLLMModel(settings.llm_model || '');
       setDeepseekApiKey(settings.deepseek_api_key || '');
@@ -367,7 +367,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const embeddingModelOptions = Array.from(new Set([selectedEmbeddingModel, ...availableEmbeddingModels])).map((model) => ({
+  const embeddingModelOptions = Array.from(new Set([...availableEmbeddingModels])).filter(m => m).map((model) => ({
     label: model,
     value: model,
   }));

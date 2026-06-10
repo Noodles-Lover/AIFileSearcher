@@ -1,7 +1,7 @@
 import os
 from typing import Optional, Union
 
-from backend.utils.path_utils import get_embedding_models_path, get_data_path
+from backend.utils.path_utils import get_embedding_models_path, get_llm_models_path, get_data_path
 from backend.utils.settings_manager import settings_manager
 
 from .EmbeddingModel import EmbeddingModel
@@ -52,18 +52,25 @@ class SystemManager:
 
     def _auto_load(self):
         try:
-            print("🚀 程序启动，自动加载模型...")
-            self.load_embedding_model()
-            # 根据设置决定是否加载 LLM
+            print("🚀 程序启动，检查模型状态...")
+
+            # 检查嵌入模型是否存在
             settings = settings_manager.load()
-            llm_provider = settings.get("llm_provider", "local")
-            if llm_provider == "deepseek" and settings.get("deepseek_api_key"):
-                self.load_llm()
-            elif llm_provider == "local" and settings.get("llm_model"):
-                self.load_llm()
-            print("✅ 模型加载完成")
+            embedding_model_name = settings.get("embedding_model", "bge-m3")
+            embedding_model_path = get_embedding_models_path(embedding_model_name)
+
+            if os.path.exists(embedding_model_path):
+                print(f"📊 发现本地嵌入模型: {embedding_model_name}")
+                self.load_embedding_model()
+            else:
+                print(f"⚠️ 未找到嵌入模型: {embedding_model_name}")
+                print(f"   模型路径: {embedding_model_path}")
+                print(f"   请通过设置页面下载模型")
+
+            # 不自动加载 LLM（避免启动慢）
+            print("✅ 启动检查完成（LLM 将在首次使用时加载）")
         except Exception as e:
-            print(f"❌ 模型加载失败: {e}")
+            print(f"❌ 启动检查失败: {e}")
 
     def load_embedding_model(self, model_name: str | None = None, force: bool = False):
         if model_name is None:

@@ -11,9 +11,15 @@ router = APIRouter()
 
 @router.get("/api/embedding/list")
 def get_embedding_models():
+    settings = settings_manager.load()
+    current_model = settings.get("embedding_model", "")
+    # 如果当前模型不在本地模型列表中，返回空字符串
+    local_models = list_local_embedding_models()
+    if current_model and current_model not in local_models:
+        current_model = ""
     return {
-        "models": list_local_embedding_models(),
-        "current_model": settings_manager.load().get("embedding_model", "bge-m3"),
+        "models": local_models,
+        "current_model": current_model,
     }
 
 

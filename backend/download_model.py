@@ -18,36 +18,6 @@ except ImportError:
     sys.exit(1)
 
 
-def download_with_git_mirror(model_id, local_dir):
-    mirror_url = f"https://hf-mirror.com/{model_id}"
-    print(f"\n切换到 git 镜像下载: {mirror_url}")
-
-    if os.path.exists(local_dir):
-        if os.path.isdir(local_dir) and not os.listdir(local_dir):
-            os.rmdir(local_dir)
-        else:
-            raise RuntimeError(f"目标目录已存在且非空，无法继续镜像下载: {local_dir}")
-
-    clone_result = subprocess.run(
-        ["git", "clone", mirror_url, local_dir],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if clone_result.returncode != 0:
-        raise RuntimeError(clone_result.stderr.strip() or clone_result.stdout.strip() or "git clone failed")
-
-    lfs_result = subprocess.run(
-        ["git", "-C", local_dir, "lfs", "pull"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if lfs_result.returncode != 0:
-        raise RuntimeError(lfs_result.stderr.strip() or lfs_result.stdout.strip() or "git lfs pull failed")
-
 
 def download_model(model_id, local_dir):
     print(f"正在下载模型 {model_id} 到 {local_dir}...")
@@ -66,18 +36,6 @@ def download_model(model_id, local_dir):
     except Exception as first_error:
         print(f"\nHub 下载失败: {first_error}")
 
-        try:
-            download_with_git_mirror(model_id, local_dir)
-            print(f"\n镜像下载完成，模型已保存到: {local_dir}")
-            print("现在可以在程序设置里的模型列表中看到它。")
-            return
-        except Exception as second_error:
-            if os.path.isdir(local_dir) and not os.listdir(local_dir):
-                shutil.rmtree(local_dir, ignore_errors=True)
-
-            print(f"\n镜像下载也失败: {second_error}")
-            print("请检查网络连接、镜像可达性，或稍后重试。")
-
 
 if __name__ == "__main__":
     print("=" * 50)
@@ -93,9 +51,9 @@ if __name__ == "__main__":
         "1": "BAAI/bge-small-zh-v1.5",
         "2": "BAAI/bge-large-zh-v1.5",
         "3": "BAAI/bge-m3",
-        "4": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
-        "5": "sentence-transformers/clip-ViT-B-32",
-        "6": "sentence-transformers/clip-ViT-L-14",
+        "4": "BAAI/bge-small-en-v1.5",
+        "5": "intfloat/multilingual-e5-base",
+        "7": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
     }
     
     llm_models = {
@@ -107,8 +65,10 @@ if __name__ == "__main__":
         "6": "Qwen/Qwen2.5-3B-Instruct",
         "7": "Qwen/Qwen2.5-7B-Instruct",
         "8": "THUDM/glm-4-9b-chat",
-        "9": "microsoft/Phi-3-mini-4k-instruct",
-        "10": "mistralai/Mistral-7B-Instruct-v0.2",
+        "9": "THUDM/chatglm3-6b",
+        "10": "microsoft/Phi-3-mini-4k-instruct",
+        "11": "mistralai/Mistral-7B-Instruct-v0.2",
+        "12": "mistralai/Mistral-7B-Instruct-v0.1",
     }
     
     if type_choice == "2":
