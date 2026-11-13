@@ -67,14 +67,14 @@ class LocalInstructorLLM(InstructorLLM):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_path,
                 trust_remote_code=True,
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 device_map="auto",
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_path,
                 trust_remote_code=True,
-                torch_dtype=torch.float32,
+                dtype=torch.float32,
             )
             self.model.to(self.device)
 

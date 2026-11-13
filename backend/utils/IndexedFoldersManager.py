@@ -76,14 +76,16 @@ class IndexedFoldersManager:
     
     def _save(self, folders: Set[str]) -> None:
         """
-        保存已索引文件夹记录
-        
+        保存已索引文件夹记录（先写临时文件再替换，避免写一半损坏）
+
         Args:
             folders: 已索引文件夹路径的集合
         """
         try:
-            with open(self.file_path, 'w', encoding='utf-8') as f:
+            tmp_path = self.file_path + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(sorted(folders), f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, self.file_path)
         except Exception as e:
             print(f"保存已索引文件夹记录失败: {e}")
 

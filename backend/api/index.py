@@ -6,8 +6,6 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from backend.RAG.SystemManager import SystemManager
-from backend.RAG.FileCache import FileCache
-from backend.RAG.IndexWriter import IndexWriter
 from backend.process.FileProcessor import FileProcessor
 from backend.utils.path_utils import get_project_root, get_data_path
 from backend.utils.IndexedFoldersManager import folders_manager
@@ -21,8 +19,8 @@ def clear_cache():
     清理已从磁盘消失的文件的向量与缓存记录
     """
     try:
-        cache_path = get_data_path("file_cache.json")
-        file_cache = FileCache(cache_path)
+        sm = SystemManager.get_instance()
+        file_cache = sm.get_file_cache()
         missing_files = [
             file_path for file_path in file_cache.get_all_files()
             if not os.path.exists(file_path)
@@ -30,9 +28,9 @@ def clear_cache():
 
         removed_vectors = 0
         if missing_files:
-            sm = SystemManager.get_instance()
-            writer = IndexWriter(sm.get_vector_store(), file_cache)
+            writer = sm.get_index_writer()
             removed_vectors = writer.remove_files(missing_files)
+            writer.save()
 
         print(f"清理了 {len(missing_files)} 个失效文件，{removed_vectors} 个向量")
 
@@ -49,9 +47,7 @@ def clear_index():
     """
     try:
         index_path = get_data_path("faiss_index.bin")
-        metadata_path = get_data_path("metadata.json")
-        cache_path = get_data_path("file_cache.json")
-        info_path = get_data_path("faiss_index.info")
+        state_path = get_data_path("index_state.json")
 
         files_deleted = []
 
@@ -59,17 +55,9 @@ def clear_index():
             os.remove(index_path)
             files_deleted.append("faiss_index.bin")
 
-        if os.path.exists(metadata_path):
-            os.remove(metadata_path)
-            files_deleted.append("metadata.json")
-
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
-            files_deleted.append("file_cache.json")
-
-        if os.path.exists(info_path):
-            os.remove(info_path)
-            files_deleted.append("faiss_index.info")
+        if os.path.exists(state_path):
+            os.remove(state_path)
+            files_deleted.append("index_state.json")
 
         folders_manager.clear()
 
@@ -108,19 +96,16 @@ def remove_indexed_folder(request: dict):
         # 规范化路径
         folder_path = os.path.normpath(folder_path)
 
-        cache_path = get_data_path("file_cache.json")
-        if not os.path.exists(cache_path):
-            return {"success": True, "message": "没有需要删除的索引数据"}
-
-        file_cache = FileCache(cache_path)
+        sm = SystemManager.get_instance()
+        file_cache = sm.get_file_cache()
         files_to_remove = file_cache.get_files_under(folder_path)
 
         if not files_to_remove:
             return {"success": True, "message": f"未找到 {folder_path} 下的索引数据"}
 
-        sm = SystemManager.get_instance()
-        writer = IndexWriter(sm.get_vector_store(), file_cache)
+        writer = sm.get_index_writer()
         removed_vectors = writer.remove_files(files_to_remove)
+        writer.save()
 
         # 从已索引文件夹记录中移除
         folders_manager.remove_folder(folder_path)
@@ -156,9 +141,8 @@ async def index_folder(request: dict):
             processor = FileProcessor()
             
             # 初始化文件缓存
-            cache_path = get_data_path("file_cache.json")
-            file_cache = FileCache(cache_path)
-            writer = IndexWriter(store, file_cache)
+            file_cache = sm.get_file_cache()
+            writer = sm.get_index_writer()
             include_subfolders = bool(settings_manager.load().get("include_subfolders", False))
             
             # 发送初始化事件
@@ -284,24 +268,15 @@ async def index_folder(request: dict):
                     print(f"❌ 错误: {file_name} - {str(e)} ({current}/{total_files})")
                     yield f"data: {json.dumps({'status': 'error', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'錯誤: {str(e)}'})}\n\n"
             
-            # 保存向量数据库
+            # 保存向量数据库与文件缓存（原子写，同代落盘）
             try:
-                store.save()
+                writer.save()
                 yield f"data: {json.dumps({'status': 'saving', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': '正在保存向量数据库...'})}\n\n"
                 await asyncio.sleep(0)
             except Exception as save_error:
                 yield f"data: {json.dumps({'status': 'error', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': f'保存失败: {str(save_error)}'})}\n\n"
                 await asyncio.sleep(0)
-            
-            # 保存文件缓存
-            try:
-                file_cache.save_cache()
-                yield f"data: {json.dumps({'status': 'saving', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': '正在保存文件缓存...'})}\n\n"
-                await asyncio.sleep(0)
-            except Exception as cache_error:
-                yield f"data: {json.dumps({'status': 'error', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': f'缓存保存失败: {str(cache_error)}'})}\n\n"
-                await asyncio.sleep(0)
-            
+
             # 记录已索引的文件夹
             if processed_count > 0:
                 folders_manager.add_folder(folder_path)

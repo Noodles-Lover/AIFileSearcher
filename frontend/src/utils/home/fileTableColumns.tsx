@@ -32,7 +32,7 @@ export const generateColumns = ({
       ellipsis: true,
       width: '40%',
       render: (text, record) => (
-        <Space direction="vertical" size={0} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={0} style={{ width: '100%' }}>
           <Space onClick={() => onOpenFile(record.path)} style={{ cursor: 'pointer' }}>
             <FileIcon record={record} />
             <Text strong>{text}</Text>

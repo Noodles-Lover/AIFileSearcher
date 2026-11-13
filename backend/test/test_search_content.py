@@ -44,7 +44,6 @@ def test_search_content():
             ]
             
             store.add(test_vectors, test_metas)
-            store.save()
             print("✓ Test data added")
         
         # Test search

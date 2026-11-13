@@ -90,10 +90,7 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
         if not store or not hasattr(store, 'index') or store.index is None or store.index.ntotal == 0:
             return {"results": [], "msg": "向量數據庫為空或未初始化"}
 
-        from backend.RAG.FileCache import FileCache
-        from backend.utils.path_utils import get_data_path
-        cache_path = get_data_path("file_cache.json")
-        file_cache = FileCache(cache_path)
+        file_cache = sm.get_file_cache()
 
         extensions = set(ext.lower() for ext in file_extensions.split(',')) if file_extensions else None
 

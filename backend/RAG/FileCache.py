@@ -1,46 +1,17 @@
 import os
-import json
 import time
 from typing import Dict, List, Set, Any
 
 class FileCache:
-    def __init__(self, cache_path: str):
-        self.cache_path = cache_path
-        self.fileData: Dict[str, Dict[str, Any]] = {}  # {file_path: {vectors: [], fileSize: int, modified_time: int}}
-        self.load_cache()
-    
-    def load_cache(self):
-        """Load cache file"""
-        if not os.path.exists(self.cache_path):
-            print("Creating new file cache")
-            return
+    """文件级缓存（内存态；持久化由 IndexStorage 统一负责）"""
 
-        try:
-            with open(self.cache_path, 'r', encoding='utf-8') as f:
-                records = json.load(f).get('fileData', {})
+    def __init__(self, files: Dict[str, Dict[str, Any]] = None):
+        # {file_path: {vector_ids: [], fileSize: int, modified_time: int}}
+        self.fileData: Dict[str, Dict[str, Any]] = dict(files or {})
 
-            # 旧缓存记录的是物理下标，不能当作稳定 ID 使用
-            if any('vector_ids' not in record for record in records.values()):
-                print("File cache schema is incompatible; rebuild the index")
-                self.fileData = {}
-                return
-
-            self.fileData = records
-            print(f"File cache loaded: {len(self.fileData)} files")
-        except Exception as e:
-            print(f"Cache file corrupted, recreating: {e}")
-            self.fileData = {}
-    
-    def save_cache(self):
-        """Save cache to file"""
-        try:
-            data = {
-                'fileData': self.fileData
-            }
-            with open(self.cache_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"Failed to save cache: {e}")
+    def export(self) -> Dict[str, Dict[str, Any]]:
+        """导出全部缓存记录，供持久化层写入"""
+        return self.fileData
     
     def should_process_file(self, file_path: str) -> tuple[bool, str]:
         """Check if file needs processing"""
@@ -71,8 +42,6 @@ class FileCache:
                 'fileSize': current_size,
                 'modified_time': current_mtime
             }
-            
-            self.save_cache()
         except Exception as e:
             print(f"Failed to update file cache: {e}")
     
@@ -86,7 +55,6 @@ class FileCache:
         
         if file_path in self.fileData:
             del self.fileData[file_path]
-            self.save_cache()
         
         return vector_ids
     

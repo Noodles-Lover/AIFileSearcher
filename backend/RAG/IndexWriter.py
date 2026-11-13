@@ -1,15 +1,17 @@
 from typing import Any, Dict, Iterable, List
 
 from backend.RAG.FileCache import FileCache
+from backend.RAG.IndexStorage import IndexStorage
 from backend.RAG.VectorStore import VectorStore
 
 
 class IndexWriter:
     """向量索引与文件缓存的统一写入口"""
 
-    def __init__(self, store: VectorStore, cache: FileCache):
+    def __init__(self, store: VectorStore, cache: FileCache, storage: IndexStorage):
         self.store = store
         self.cache = cache
+        self.storage = storage
 
     def write_file(
         self,
@@ -38,3 +40,7 @@ class IndexWriter:
         for file_path in file_paths:
             self.cache.remove_file_cache(file_path)
         return removed
+
+    def save(self) -> None:
+        """原子落盘：bin 与 index_state.json 同代写入"""
+        self.storage.save(self.store, self.cache)

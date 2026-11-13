@@ -91,16 +91,12 @@ def get_index_size() -> int:
 def clear_index_files():
     """清空索引文件"""
     index_path = get_data_path("faiss_index.bin")
-    metadata_path = get_data_path("metadata.json")
-    cache_path = get_data_path("file_cache.json")
-    info_path = get_data_path("faiss_index.info")
-    
+    state_path = get_data_path("index_state.json")
+
     files_deleted = []
-    
-    for path, name in [(index_path, "faiss_index.bin"), 
-                       (metadata_path, "metadata.json"),
-                       (cache_path, "file_cache.json"),
-                       (info_path, "faiss_index.info")]:
+
+    for path, name in [(index_path, "faiss_index.bin"),
+                       (state_path, "index_state.json")]:
         if os.path.exists(path):
             try:
                 os.remove(path)
@@ -139,12 +135,7 @@ def setup_index(index_type, embedding_model):
     print(f"   Load time: {model_load_time:.2f}s")
     
     print(f"\n📊 Creating index: {index_type}")
-    store = VectorStore(
-        dimension=dimension,
-        index_path=get_data_path("faiss_index.bin"),
-        metadata_path=get_data_path("metadata.json"),
-        index_type=index_type
-    )
+    store = VectorStore(dimension=dimension, index_type=index_type)
     
     print(f"   Index type: {type(store.index).__name__}")
     
@@ -544,7 +535,12 @@ def run_single_evaluation(strategy, strategy_name, index_type, embedding_model):
     
     # 保存索引
     save_start = time.time()
-    store.save()
+    from backend.RAG.IndexStorage import IndexStorage
+    from backend.RAG.FileCache import FileCache
+    IndexStorage(
+        get_data_path("faiss_index.bin"),
+        get_data_path("index_state.json"),
+    ).save(store, FileCache())
     save_time = time.time() - save_start
     
     print(f"\n[Step 3] Indexed {index_stats['metadata']} chunks in {index_time:.2f}s")

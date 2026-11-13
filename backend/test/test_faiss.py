@@ -57,20 +57,11 @@ def test_faiss_workflow():
 
     # 4. 初始化 FAISS 並存儲
     print(f"[3/4] 初始化 FAISS 並存儲...")
-    
-    # 將測試文件保存在 backend/test/ 目錄下
-    test_index_path = os.path.join(current_dir, "test_index.bin")
-    test_metadata_path = os.path.join(current_dir, "test_metadata.json")
 
-    # 清理舊的索引文件以確保測試乾淨
-    if os.path.exists(test_index_path): os.remove(test_index_path)
-    if os.path.exists(test_metadata_path): os.remove(test_metadata_path)
-    
-    store = VectorStore(dimension, index_path=test_index_path, metadata_path=test_metadata_path)
-    
+    store = VectorStore(dimension, "IndexFlatL2")
+
     # 打印當前索引類型
     print(f"      FAISS 索引類型: {type(store.index).__name__} (L2 Distance)")
-    print(f"      索引文件路徑: {test_index_path}")
     
     store.add(vectors, metas)
     print(f"      已存儲 {store.index.ntotal} 條向量")

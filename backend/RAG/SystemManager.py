@@ -8,6 +8,9 @@ from .EmbeddingModel import EmbeddingModel
 from .LocalLLM import LocalLLM
 from .DeepSeekLLM import DeepSeekLLM
 from .VectorStore import VectorStore
+from .FileCache import FileCache
+from .IndexStorage import IndexStorage
+from .IndexWriter import IndexWriter
 
 # LLM 类型别名
 LLMType = Union[LocalLLM, DeepSeekLLM]
@@ -23,6 +26,9 @@ class SystemManager:
     def __init__(self):
         self.embedding_model: Optional[EmbeddingModel] = None
         self.vector_store: Optional[VectorStore] = None
+        self.file_cache: Optional[FileCache] = None
+        self.index_storage: Optional[IndexStorage] = None
+        self.index_writer: Optional[IndexWriter] = None
         self.llm: Optional[LLMType] = None  # 统一 LLM 实例（本地或 DeepSeek）
         self.current_embedding_model_name: Optional[str] = None
         self.current_llm_provider: Optional[str] = None
@@ -44,6 +50,9 @@ class SystemManager:
                 cls._instance.vector_store.metadata = {}
             cls._instance.embedding_model = None
             cls._instance.vector_store = None
+            cls._instance.file_cache = None
+            cls._instance.index_storage = None
+            cls._instance.index_writer = None
             cls._instance.llm = None
             cls._instance.current_embedding_model_name = None
             cls._instance.current_llm_provider = None
@@ -99,22 +108,46 @@ class SystemManager:
             sample_vector = self.get_embedding_model().encode(["test"])[0]
             dimension = len(sample_vector)
 
-        index_path = get_data_path("faiss_index.bin")
-        metadata_path = get_data_path("metadata.json")
-        index_type = settings_manager.load().get("index_type", "IndexFlatL2")
+        self.index_storage = IndexStorage(
+            get_data_path("faiss_index.bin"),
+            get_data_path("index_state.json"),
+        )
+        try:
+            data = self.index_storage.load()
+        except Exception as e:
+            print(f"⚠️ 索引数据损坏或不同步: {e}")
+            print("   已重置为空索引，请重新建立索引")
+            data = {"index": None, "chunks": {}, "next_id": 0, "files": {}, "index_type": None}
+
+        settings_index_type = settings_manager.load().get("index_type", "IndexFlatL2")
+        index_type = data["index_type"] or settings_index_type
 
         self.vector_store = VectorStore(
             dimension=dimension,
-            index_path=index_path,
-            metadata_path=metadata_path,
             index_type=index_type,
+            index=data["index"],
+            chunks=data["chunks"],
+            next_id=data["next_id"],
         )
+        self.file_cache = FileCache(data["files"])
         return self.vector_store
 
     def get_vector_store(self) -> VectorStore:
         if not self.vector_store:
             self.init_vector_store()
         return self.vector_store
+
+    def get_file_cache(self) -> FileCache:
+        if not self.vector_store:
+            self.init_vector_store()
+        return self.file_cache
+
+    def get_index_writer(self) -> IndexWriter:
+        if not self.vector_store:
+            self.init_vector_store()
+        if not self.index_writer:
+            self.index_writer = IndexWriter(self.vector_store, self.file_cache, self.index_storage)
+        return self.index_writer
 
     def load_llm(self, model_name: str | None = None, force: bool = False):
         """

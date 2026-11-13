@@ -91,7 +91,7 @@ const Settings: React.FC = () => {
     setFoldersLoading(true);
     try {
       const data = await apiGet<IndexedFoldersResponse>(API_ENDPOINTS.INDEXED_FOLDERS);
-      setFolders(data.folders || []);
+      setFolders(Array.from(new Set(data.folders || [])));
     } catch (error) {
       console.error('Failed to load indexed folders:', error);
     } finally {
@@ -379,7 +379,7 @@ const Settings: React.FC = () => {
 
   const llmModelOptions = [
     { label: '未选择', value: '' },
-    ...Array.from(new Set([selectedLLMModel, ...availableLLMModels])).map((model) => ({
+    ...Array.from(new Set([selectedLLMModel, ...availableLLMModels])).filter(m => m).map((model) => ({
       label: model,
       value: model,
     })),
@@ -398,7 +398,7 @@ const Settings: React.FC = () => {
       </Header>
 
       <Content style={styles.content}>
-        <Space direction="vertical" size="large" style={styles.fullWidth}>
+        <Space orientation="vertical" size="large" style={styles.fullWidth}>
           <SettingSection title="搜索设置">
             <Spin spinning={settingsLoading || settingsSaving}>
               <div style={styles.row}>
@@ -543,9 +543,9 @@ const Settings: React.FC = () => {
                 <Empty description="当前还没有已建立索引的文件夹" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
                 <div style={styles.folderList}>
-                  {folders.map((folder) => (
+                  {folders.map((folder, index) => (
                     <div
-                      key={folder}
+                      key={`${folder}-${index}`}
                       style={styles.folderItem}
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#bae7ff'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#e6f7ff'; }}
@@ -572,7 +572,7 @@ const Settings: React.FC = () => {
           </SettingSection>
 
           <SettingSection title="数据管理">
-            <Space direction="vertical" size="middle" style={styles.fullWidth}>
+            <Space orientation="vertical" size="middle" style={styles.fullWidth}>
               <div style={styles.row}>
                 <div>
                   <Text strong>清空本地索引</Text>

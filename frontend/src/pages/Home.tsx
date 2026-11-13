@@ -217,7 +217,7 @@ const Home: React.FC = () => {
       </Content>
 
       <CustomModal title="正在建立索引" open={indexing.indexing} onClose={() => {}} placement="top">
-        <Space direction="vertical" style={styles.fullWidth}>
+        <Space orientation="vertical" style={styles.fullWidth}>
           <div style={styles.progressStatus}>
             <Spin indicator={<LoadingOutlined style={{ fontSize: '16px', color: '#1890ff' }} />} />
             <Text strong style={{ color: '#1890ff' }}>{indexing.indexProgress.msg}</Text>
@@ -226,8 +226,8 @@ const Home: React.FC = () => {
             percent={indexing.indexProgress.percent}
             status={indexing.indexProgress.status === 'error' ? 'exception' : 'active'}
             strokeColor={{ '0%': '#108ee9', '50%': '#1890ff', '100%': '#52c41a' }}
-            trailColor="#f0f0f0"
-            strokeWidth={8}
+            railColor="#f0f0f0"
+            size={8}
             format={(percent) => (
               <span style={{ fontWeight: 700, color: percent === 100 ? '#52c41a' : '#1890ff' }}>
                 {percent}%
@@ -319,7 +319,7 @@ const Home: React.FC = () => {
         width={500}
         placement="center"
       >
-        <Space direction="vertical" style={styles.fullWidth}>
+        <Space orientation="vertical" style={styles.fullWidth}>
           <Text>请输入要搜索或索引的文件夹路径</Text>
           <Input
             placeholder="例如: C:\\Documents\\ProjectFiles"
@@ -344,7 +344,7 @@ const Home: React.FC = () => {
         width={600}
         placement="center"
       >
-        <Space direction="vertical" style={styles.fullWidth} size="middle">
+        <Space orientation="vertical" style={styles.fullWidth} size="middle">
           {/* LLM自动识别过滤范围 - 与全局设置同步 */}
           <div style={styles.row}>
             <div>

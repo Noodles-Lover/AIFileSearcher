@@ -30,10 +30,10 @@ class LocalLLM:
         }
 
         if self.device == "cuda" and torch.cuda.is_available():
-            model_kwargs["torch_dtype"] = torch.float16
+            model_kwargs["dtype"] = torch.float16
             model_kwargs["device_map"] = "auto"
         else:
-            model_kwargs["torch_dtype"] = torch.float32
+            model_kwargs["dtype"] = torch.float32
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
