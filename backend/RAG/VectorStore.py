@@ -2,7 +2,7 @@ import faiss
 import numpy as np
 import os
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 
 SUPPORTED_INDEX_TYPES = [
@@ -12,6 +12,9 @@ SUPPORTED_INDEX_TYPES = [
     "IndexHNSWFlat",
     "IndexLSH",
 ]
+
+# IndexIDMap2 包装后仍无法原地删除的索引类型
+IN_PLACE_DELETE_TYPES = {"IndexFlatL2", "IndexFlatIP", "IndexLSH"}
 
 
 def create_index(index_type: str, dimension: int, nlist: int = 4, 
@@ -46,6 +49,11 @@ def create_index(index_type: str, dimension: int, nlist: int = 4,
         return faiss.IndexFlatL2(dimension)
 
 
+def create_index_with_ids(index_type: str, dimension: int) -> faiss.IndexIDMap2:
+    """创建带稳定外部 ID 的索引"""
+    return faiss.IndexIDMap2(create_index(index_type, dimension))
+
+
 class VectorStore:
     """
     FAISS 向量存儲封裝
@@ -69,9 +77,10 @@ class VectorStore:
         self.index_path = index_path
         self.metadata_path = metadata_path
         self.index_type = index_type
-        self.metadata: List[Dict[str, Any]] = []
+        self.metadata: Dict[int, Dict[str, Any]] = {}
+        self.next_id = 0
 
-        self.index = create_index(index_type, dimension)
+        self.index = create_index_with_ids(index_type, dimension)
         self.load()
 
     def change_index_type(self, new_index_type: str) -> bool:
@@ -92,10 +101,7 @@ class VectorStore:
         print("警告：更換索引類型會清除所有現有數據！")
 
         self.index_type = new_index_type
-        self.index = create_index(new_index_type, self.dimension)
-        self.metadata = []
-
-        self.save()
+        self._reset()
         print("索引已重建")
         return True
 
@@ -103,82 +109,49 @@ class VectorStore:
         self,
         vectors: List[List[float]],
         metas: List[Dict[str, Any]],
-        current_file: str = "",
-    ) -> int:
-        """
-        添加向量和元數據到索引
-        """
+    ) -> List[int]:
+        """添加向量并返回分配的稳定 ID"""
         if len(vectors) == 0:
-            return 0
+            return []
+        if len(vectors) != len(metas):
+            raise ValueError("向量与元数据数量不一致")
 
         vectors_np = np.array(vectors).astype('float32')
+        self._ensure_trained(vectors_np)
 
-        if hasattr(self.index, 'is_trained') and not self.index.is_trained:
-            nlist = getattr(self.index, 'nlist', 4)
-            if len(vectors_np) >= nlist:
-                self.index.train(vectors_np)
-            elif len(vectors_np) >= 1:
-                if hasattr(self.index, 'nlist'):
-                    self.index.nlist = 1
-                self.index.train(vectors_np)
+        ids = list(range(self.next_id, self.next_id + len(vectors_np)))
+        self.index.add_with_ids(vectors_np, np.array(ids, dtype='int64'))
+        for vector_id, meta in zip(ids, metas):
+            self.metadata[vector_id] = meta
 
-        self.index.add(vectors_np)
-        self.metadata.extend(metas)
-        self.save(current_file, len(vectors))
+        self.next_id += len(vectors_np)
+        self.save()
+        return ids
 
-        return len(vectors)
+    def _ensure_trained(self, vectors_np):
+        base_index = faiss.downcast_index(self.index.index)
+        if base_index.is_trained:
+            return
+        nlist = getattr(base_index, 'nlist', 4)
+        if len(vectors_np) < nlist:
+            base_index.nlist = 1
+        base_index.train(vectors_np)
 
-    def remove_vectors_by_indices(self, indices: List[int]):
-        """
-        根据索引列表删除向量
-        
-        使用 FAISS 的 remove_ids 函数进行物理删除。
-        对于 IndexLSH，不支持删除操作，会抛出异常。
-        """
-        if not indices or self.index.ntotal == 0:
+    def remove_by_ids(self, ids: List[int]) -> int:
+        """按稳定 ID 删除向量，返回 FAISS 实际删除的数量"""
+        if not ids or self.index.ntotal == 0:
             return 0
 
-        try:
-            # IndexLSH 不支持删除操作
-            if self.index_type == "IndexLSH":
-                raise NotImplementedError(
-                    f"⚠️ {self.index_type} 不支持删除操作。\n"
-                    f"   建议：清除索引后重新向量化"
-                )
+        if self.index_type not in IN_PLACE_DELETE_TYPES:
+            raise NotImplementedError(
+                f"{self.index_type} 不支持原地删除，请清空索引后重建"
+            )
 
-            # 使用 FAISS 的 remove_ids 函数删除向量
-            indices_np = np.array(indices).astype('int64')
-            self.index.remove_ids(indices_np)
-            
-            # 更新 metadata：从后往前删除，避免索引前移问题
-            indices_set = set(indices)
-            for i in sorted(indices_set, reverse=True):
-                if i < len(self.metadata):
-                    del self.metadata[i]
-
-            self.save()
-            print(f"✅ 已删除 {len(indices)} 个向量")
-            return len(indices)
-        except NotImplementedError:
-            raise  # 重新抛出 NotImplementedError
-        except Exception as e:
-            print(f"⚠️ 删除向量失败: {e}")
-            return 0
-
-    def remove_vectors_by_file(self, file_path: str) -> int:
-        """
-        根据文件路径删除所有相关向量
-        """
-        indices_to_remove = []
-
-        for i, meta in enumerate(self.metadata):
-            if meta.get('file_path') == file_path:
-                indices_to_remove.append(i)
-
-        if indices_to_remove:
-            self.remove_vectors_by_indices(indices_to_remove)
-
-        return len(indices_to_remove)
+        removed = int(self.index.remove_ids(np.array(ids, dtype='int64')))
+        for vector_id in set(int(i) for i in ids):
+            self.metadata.pop(vector_id, None)
+        self.save()
+        return removed
 
     def search(self, query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
         if self.index.ntotal == 0:
@@ -197,10 +170,14 @@ class VectorStore:
 
             results = []
             for i, idx in enumerate(I[0]):
-                if idx != -1 and idx < len(self.metadata):
-                    item = self.metadata[idx].copy()
-                    item['score'] = float(D[0][i])
-                    results.append(item)
+                if idx < 0:
+                    continue
+                item = self.metadata.get(int(idx))
+                if item is None:
+                    continue
+                item = item.copy()
+                item['score'] = float(D[0][i])
+                results.append(item)
 
             return results
         except Exception as e:
@@ -228,50 +205,61 @@ class VectorStore:
 
             raise RuntimeError(f"搜索失败: {error_type} - {error_msg}") from e
 
-    def save(self, current_file: str = None, current_vectors: int = None):
-        """保存索引和元數據到磁盤"""
+    def save(self):
+        """保存索引、元数据和 ID 分配进度"""
         index_info = {
             "index_type": self.index_type,
             "dimension": self.dimension,
         }
+        state = {
+            "next_id": self.next_id,
+            "chunks": self.metadata,
+        }
         faiss.write_index(self.index, self.index_path)
         with open(self.metadata_path, 'w', encoding='utf-8') as f:
-            json.dump(self.metadata, f, ensure_ascii=False, indent=2)
+            json.dump(state, f, ensure_ascii=False, indent=2)
 
         with open(self.index_path + ".info", 'w', encoding='utf-8') as f:
             json.dump(index_info, f, ensure_ascii=False, indent=2)
 
     def load(self):
-        """從磁盤加載索引和元數據"""
+        """加载索引与元数据；格式不兼容时以空索引重建"""
         info_path = self.index_path + ".info"
 
-        if os.path.exists(self.index_path) and os.path.exists(self.metadata_path):
-            try:
-                self.index = faiss.read_index(self.index_path)
-
-                if os.path.exists(info_path):
-                    with open(info_path, 'r', encoding='utf-8') as f:
-                        info = json.load(f)
-                    self.index_type = info.get("index_type", "IndexFlatL2")
-
-                with open(self.metadata_path, 'r', encoding='utf-8') as f:
-                    self.metadata = json.load(f)
-                    
-                print(f"向量存儲已加載: {self.index.ntotal} 個向量，指數類型: {self.index_type}")
-            except Exception as e:
-                print(f"加載向量存儲時出錯: {e}")
-                print("重建索引...")
-                self.index = create_index(self.index_type, self.dimension)
-                self.metadata = []
-                self.save()
-        else:
+        if not (os.path.exists(self.index_path) and os.path.exists(self.metadata_path)):
             print("向量存儲文件不存在，將創建新的索引")
-            if self.index is None:
-                self.index = create_index(self.index_type, self.dimension)
+            return
+
+        try:
+            index = faiss.read_index(self.index_path)
+            with open(self.metadata_path, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+
+            # 裸索引或列表元数据以物理位置为身份，无法映射成稳定 ID
+            if not isinstance(index, faiss.IndexIDMap2) or not isinstance(state, dict) or "chunks" not in state:
+                raise ValueError("索引格式不兼容")
+
+            self.index = index
+            self.metadata = {int(k): v for k, v in state["chunks"].items()}
+            self.next_id = int(state["next_id"])
+
+            if os.path.exists(info_path):
+                with open(info_path, 'r', encoding='utf-8') as f:
+                    self.index_type = json.load(f).get("index_type", "IndexFlatL2")
+
+            print(f"向量存儲已加載: {self.index.ntotal} 個向量，指數類型: {self.index_type}")
+        except Exception as e:
+            print(f"加載向量存儲時出錯: {e}")
+            print("重建索引，請重新建立索引")
+            self._reset()
+
+    def _reset(self):
+        self.index = create_index_with_ids(self.index_type, self.dimension)
+        self.metadata = {}
+        self.next_id = 0
+        self.save()
 
     def clear(self):
         """清除所有索引和元数据"""
-        self.index = create_index(self.index_type, self.dimension)
-        self.metadata = []
-        self.save()
+        self._reset()
         print("索引已清除")

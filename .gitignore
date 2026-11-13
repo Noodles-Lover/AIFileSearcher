@@ -47,6 +47,8 @@ backend/test/ragas_test/result/
 # Local Files
 models/
 local_data/
+temp/
+优化记录.md
 
 # References codes
 references/

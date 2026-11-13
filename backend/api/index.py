@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.RAG.SystemManager import SystemManager
 from backend.RAG.FileCache import FileCache
+from backend.RAG.IndexWriter import IndexWriter
 from backend.process.FileProcessor import FileProcessor
 from backend.utils.path_utils import get_project_root, get_data_path
 from backend.utils.IndexedFoldersManager import folders_manager
@@ -17,18 +18,26 @@ router = APIRouter()
 @router.post("/api/clear_cache")
 def clear_cache():
     """
-    清理无用文件缓存（真正不存在的文件）
+    清理已从磁盘消失的文件的向量与缓存记录
     """
     try:
         cache_path = get_data_path("file_cache.json")
         file_cache = FileCache(cache_path)
-        
-        cleaned_count = file_cache.clean_nonexistent_files()
-        
-        print(f"清理了 {cleaned_count} 个无用文件缓存记录")
-        
-        return {"success": True, "message": f"清理了 {cleaned_count} 个无用文件缓存记录"}
-        
+        missing_files = [
+            file_path for file_path in file_cache.get_all_files()
+            if not os.path.exists(file_path)
+        ]
+
+        removed_vectors = 0
+        if missing_files:
+            sm = SystemManager.get_instance()
+            writer = IndexWriter(sm.get_vector_store(), file_cache)
+            removed_vectors = writer.remove_files(missing_files)
+
+        print(f"清理了 {len(missing_files)} 个失效文件，{removed_vectors} 个向量")
+
+        return {"success": True, "message": f"清理了 {len(missing_files)} 个失效文件，{removed_vectors} 个向量"}
+
     except Exception as e:
         print(f"清理缓存时出错: {e}")
         return {"error": f"清理缓存失败: {str(e)}"}
@@ -104,38 +113,21 @@ def remove_indexed_folder(request: dict):
             return {"success": True, "message": "没有需要删除的索引数据"}
 
         file_cache = FileCache(cache_path)
-        all_files = file_cache.get_all_files()
-
-        # 找出属于该文件夹的所有文件
-        normalized_folder = folder_path.replace("/", "\\").lower()
-        files_to_remove = [
-            f for f in all_files
-            if os.path.normpath(f).replace("/", "\\").lower().startswith(normalized_folder + "\\")
-            or os.path.normpath(f).replace("/", "\\").lower() == normalized_folder
-        ]
+        files_to_remove = file_cache.get_files_under(folder_path)
 
         if not files_to_remove:
             return {"success": True, "message": f"未找到 {folder_path} 下的索引数据"}
 
-        # 收集需要删除的向量索引
-        indices_to_remove = set()
-        for file_path in files_to_remove:
-            indices = file_cache.get_file_vectors(file_path)
-            indices_to_remove.update(indices)
-            file_cache.remove_file_cache(file_path)
-
         sm = SystemManager.get_instance()
-        store = sm.get_vector_store()
-        if store and store.index and indices_to_remove:
-            store.remove_vectors_by_indices(list(indices_to_remove))
-            store.save()
+        writer = IndexWriter(sm.get_vector_store(), file_cache)
+        removed_vectors = writer.remove_files(files_to_remove)
 
         # 从已索引文件夹记录中移除
         folders_manager.remove_folder(folder_path)
 
         return {
             "success": True,
-            "message": f"已删除 {folder_path} 的索引数据（{len(files_to_remove)} 个文件，{len(indices_to_remove)} 个向量）"
+            "message": f"已删除 {folder_path} 的索引数据（{len(files_to_remove)} 个文件，{removed_vectors} 个向量）"
         }
 
     except Exception as e:
@@ -166,6 +158,7 @@ async def index_folder(request: dict):
             # 初始化文件缓存
             cache_path = get_data_path("file_cache.json")
             file_cache = FileCache(cache_path)
+            writer = IndexWriter(store, file_cache)
             include_subfolders = bool(settings_manager.load().get("include_subfolders", False))
             
             # 发送初始化事件
@@ -181,7 +174,15 @@ async def index_folder(request: dict):
                         files_to_process.append(file_path)
                 if not include_subfolders:
                     break
-            
+
+            # 清理已从磁盘消失的文件的旧向量与缓存记录
+            missing_files = [
+                file_path for file_path in file_cache.get_files_under(folder_path)
+                if not os.path.exists(file_path)
+            ]
+            if missing_files:
+                writer.remove_files(missing_files)
+
             total_files = len(files_to_process)
             
             if total_files == 0:
@@ -246,12 +247,8 @@ async def index_folder(request: dict):
                                         }
                                         metas.append(metadata)
                                     
-                                    # 批量添加到向量数据库
-                                    added_count = store.add(embeddings, metas, file_name)
-                                    
-                                    # 更新文件缓存
-                                    vector_indices = list(range(len(store.metadata) - added_count, len(store.metadata)))
-                                    file_cache.update_file_cache(file_path, vector_indices)
+                                    # 替换该文件的全部向量（先删旧，再写新）
+                                    writer.write_file(file_path, embeddings, metas)
                                     processed_count += 1
                                     
                                     # 控制台输出

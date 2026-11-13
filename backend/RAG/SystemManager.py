@@ -41,7 +41,7 @@ class SystemManager:
         if cls._instance is not None:
             if cls._instance.vector_store:
                 cls._instance.vector_store.index = None
-                cls._instance.vector_store.metadata = []
+                cls._instance.vector_store.metadata = {}
             cls._instance.embedding_model = None
             cls._instance.vector_store = None
             cls._instance.llm = None
