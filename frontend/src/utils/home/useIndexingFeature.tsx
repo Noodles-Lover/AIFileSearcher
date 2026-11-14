@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { message } from 'antd';
-import { API_ENDPOINTS } from '../api';
+import { Modal, message } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { API_ENDPOINTS, apiPost } from '../api';
 
 export interface IndexProgressState {
   status: string;
@@ -9,6 +10,7 @@ export interface IndexProgressState {
   file: string;
   percent: number;
   msg: string;
+  last_done: string;
 }
 
 const INITIAL_INDEX_PROGRESS: IndexProgressState = {
@@ -18,10 +20,12 @@ const INITIAL_INDEX_PROGRESS: IndexProgressState = {
   file: '',
   percent: 0,
   msg: '',
+  last_done: '',
 };
 
 export function useIndexingFeature() {
   const [indexing, setIndexing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [indexProgress, setIndexProgress] = useState<IndexProgressState>(INITIAL_INDEX_PROGRESS);
 
   const handleIndexFolder = async (path: string) => {
@@ -31,6 +35,7 @@ export function useIndexingFeature() {
     }
 
     setIndexing(true);
+    setCancelling(false);
     setIndexProgress({ ...INITIAL_INDEX_PROGRESS, msg: '正在初始化索引...' });
 
     try {
@@ -67,6 +72,15 @@ export function useIndexingFeature() {
             if (eventData.status === 'complete') {
               setIndexProgress((prev) => ({ ...prev, ...eventData }));
               message.success('索引完成');
+              setCancelling(false);
+              setTimeout(() => setIndexing(false), 1000);
+              continue;
+            }
+
+            if (eventData.status === 'cancelled') {
+              setIndexProgress((prev) => ({ ...prev, ...eventData }));
+              message.warning(eventData.msg || '索引已取消，已保存部分结果');
+              setCancelling(false);
               setTimeout(() => setIndexing(false), 1000);
               continue;
             }
@@ -74,6 +88,7 @@ export function useIndexingFeature() {
             if (eventData.status === 'fatal') {
               message.error(`索引失败: ${eventData.msg}`);
               setIndexing(false);
+              setCancelling(false);
               continue;
             }
 
@@ -85,6 +100,7 @@ export function useIndexingFeature() {
               percent: eventData.percent ?? prev.percent,
               file: eventData.file ?? prev.file,
               msg: eventData.msg || prev.msg,
+              last_done: eventData.last_done ?? prev.last_done,
             }));
           } catch (error) {
             console.error('解析索引进度失败:', error, line);
@@ -95,12 +111,41 @@ export function useIndexingFeature() {
       console.error('索引失败:', error);
       message.error(`索引失败: ${error instanceof Error ? error.message : '未知错误'}`);
       setIndexing(false);
+      setCancelling(false);
     }
+  };
+
+  const handleCancelIndex = () => {
+    if (!indexing || cancelling) return;
+    Modal.confirm({
+      title: '确认取消索引？',
+      icon: <ExclamationCircleOutlined />,
+      content: '当前文件处理完成后停止，已处理部分将保存为部分索引，下次索引自动续传。',
+      okText: '确认取消',
+      cancelText: '继续索引',
+      okType: 'danger',
+      onOk: async () => {
+        setCancelling(true);
+        try {
+          const data = await apiPost<{ success?: boolean; message?: string }>(API_ENDPOINTS.INDEX_CANCEL);
+          if (!data.success) {
+            message.error(data.message || '取消失败');
+            setCancelling(false);
+          }
+          // 成功后由 cancelled 事件驱动弹窗关闭
+        } catch {
+          message.error('取消失败');
+          setCancelling(false);
+        }
+      },
+    });
   };
 
   return {
     indexing,
     indexProgress,
     handleIndexFolder,
+    handleCancelIndex,
+    cancelling,
   };
 }

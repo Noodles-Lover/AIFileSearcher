@@ -12,6 +12,7 @@ import {
   Space,
   Spin,
   Switch,
+  Tag,
   Typography,
 } from 'antd';
 import {
@@ -32,8 +33,13 @@ interface ApiResponse {
   error?: string;
 }
 
+interface IndexedFolder {
+  path: string;
+  complete: boolean;
+}
+
 interface IndexedFoldersResponse {
-  folders?: string[];
+  folders?: IndexedFolder[];
   error?: string;
 }
 
@@ -81,7 +87,7 @@ const Settings: React.FC = () => {
   const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
   const [llmAutoFilterEnabled, setLlmAutoFilterEnabled] = useState(true);
   const [selectedIndexType, setSelectedIndexType] = useState('IndexFlatL2');
-  const [folders, setFolders] = useState<string[]>([]);
+  const [folders, setFolders] = useState<IndexedFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
 
@@ -91,7 +97,10 @@ const Settings: React.FC = () => {
     setFoldersLoading(true);
     try {
       const data = await apiGet<IndexedFoldersResponse>(API_ENDPOINTS.INDEXED_FOLDERS);
-      setFolders(Array.from(new Set(data.folders || [])));
+      const list = data.folders || [];
+      const byPath = new Map<string, IndexedFolder>();
+      list.forEach(f => { if (f.path && !byPath.has(f.path)) byPath.set(f.path, f); });
+      setFolders(Array.from(byPath.values()));
     } catch (error) {
       console.error('Failed to load indexed folders:', error);
     } finally {
@@ -545,22 +554,23 @@ const Settings: React.FC = () => {
                 <div style={styles.folderList}>
                   {folders.map((folder, index) => (
                     <div
-                      key={`${folder}-${index}`}
+                      key={`${folder.path}-${index}`}
                       style={styles.folderItem}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#bae7ff'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#e6f7ff'; }}
                     >
                       <Space>
                         <FolderOutlined style={styles.folderIcon} />
-                        <Text style={styles.folderText}>{folder}</Text>
+                        <Text style={styles.folderText}>{folder.path}</Text>
+                        {folder.complete
+                          ? <Tag color="green">完整索引</Tag>
+                          : <Tag color="orange">部分索引（可续索引）</Tag>}
                       </Space>
                       <Button
                         type="text"
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
-                        onClick={() => handleRemoveFolder(folder)}
-                        loading={deletingFolder === folder}
+                        onClick={() => handleRemoveFolder(folder.path)}
+                        loading={deletingFolder === folder.path}
                       >
                         移除
                       </Button>

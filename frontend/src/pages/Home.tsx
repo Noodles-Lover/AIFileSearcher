@@ -77,6 +77,7 @@ const styles: Record<string, CSSProperties> = {
   },
   progressState: { display: 'flex', alignItems: 'center', gap: '4px' },
   progressComplete: { color: '#52c41a', fontWeight: 700 },
+  cancellingText: { color: '#fa8c16', fontWeight: 600 },
   progressDot: {
     display: 'inline-block',
     width: '8px',
@@ -216,7 +217,7 @@ const Home: React.FC = () => {
         </div>
       </Content>
 
-      <CustomModal title="正在建立索引" open={indexing.indexing} onClose={() => {}} placement="top">
+      <CustomModal title="正在建立索引" open={indexing.indexing} onClose={indexing.handleCancelIndex} placement="top">
         <Space orientation="vertical" style={styles.fullWidth}>
           <div style={styles.progressStatus}>
             <Spin indicator={<LoadingOutlined style={{ fontSize: '16px', color: '#1890ff' }} />} />
@@ -227,7 +228,6 @@ const Home: React.FC = () => {
             status={indexing.indexProgress.status === 'error' ? 'exception' : 'active'}
             strokeColor={{ '0%': '#108ee9', '50%': '#1890ff', '100%': '#52c41a' }}
             railColor="#f0f0f0"
-            size={8}
             format={(percent) => (
               <span style={{ fontWeight: 700, color: percent === 100 ? '#52c41a' : '#1890ff' }}>
                 {percent}%
@@ -236,12 +236,18 @@ const Home: React.FC = () => {
           />
           <div style={styles.progressFooter}>
             <span style={styles.progressState}>
-              {indexing.indexProgress.percent === 100 ? (
+              {indexing.cancelling ? (
+                <span style={styles.cancellingText}>正在取消，当前文件处理完成后停止并保存...</span>
+              ) : indexing.indexProgress.percent === 100 ? (
                 <span style={styles.progressComplete}>完成</span>
               ) : (
                 <>
                   <span className="pulse-dot" style={styles.progressDot} />
-                  <span>处理中...</span>
+                  <span>
+                    {indexing.indexProgress.last_done
+                      ? `已处理: ${indexing.indexProgress.last_done}`
+                      : '等待处理...'}
+                  </span>
                 </>
               )}
             </span>
