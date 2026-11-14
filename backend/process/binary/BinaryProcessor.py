@@ -74,6 +74,7 @@ class BinaryProcessor(BaseFileProcessor):
 所在目录：{structure.get('locate_dir', '未知')}{sibling_info}"""
         try:
             sm = SystemManager.get_instance()
+            print(f"🧠 正在为 {file_name} 生成 LLM 描述（本地模型，可能耗时较长）...")
             response = sm.generate_with_llm(prompt)
             print(f"* LLM回复: {response}")
             return response if response else default_description

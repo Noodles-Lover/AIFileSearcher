@@ -115,6 +115,7 @@ class PDFParser(TextChunkProcessor):
         try:
             from backend.RAG.SystemManager import SystemManager
             sm = SystemManager.get_instance()
+            print(f"🧠 正在为扫描件 {file_name} 生成 LLM 描述（本地模型，可能耗时较长）...")
             response = sm.generate_with_llm(prompt)
             print(f"* 扫描件 LLM 描述: {response}")
             return response if response else f"扫描件 PDF 文件: {file_name}"

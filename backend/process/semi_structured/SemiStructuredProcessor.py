@@ -93,6 +93,7 @@ class SemiStructuredProcessor(BaseFileProcessor):
         try:
             from backend.RAG.SystemManager import SystemManager
             sm = SystemManager.get_instance()
+            print(f"🧠 正在为 {os.path.basename(self.file_path)} 生成 LLM 描述（本地模型，可能耗时较长）...")
             response = sm.generate_with_llm(prompt)
             if response:
                 return response

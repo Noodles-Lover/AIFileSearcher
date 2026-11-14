@@ -13,6 +13,9 @@ from backend.utils.settings_manager import settings_manager
 
 router = APIRouter()
 
+# 索引任务状态（单任务）：/api/index_cancel 置位 cancel，生成器在文件边界检查并停止
+index_task_state = {"active": False, "cancel": False}
+
 @router.post("/api/clear_cache")
 def clear_cache():
     """
@@ -74,11 +77,11 @@ def clear_index():
 @router.get("/api/indexed_folders")
 def get_indexed_folders():
     """
-    获取所有已索引的根文件夹路径
+    获取所有已索引的根文件夹路径及其是否完整索引
     """
     try:
         folders = folders_manager.get_indexed_folders()
-        return {"folders": sorted(folders)}
+        return {"folders": [{"path": path, "complete": complete} for path, complete in sorted(folders.items())]}
     except Exception as e:
         print(f"获取已索引文件夹时出错: {e}")
         return {"error": f"获取已索引文件夹失败: {str(e)}"}
@@ -131,10 +134,17 @@ async def index_folder(request: dict):
                 await asyncio.sleep(0)
                 return
             
+            if index_task_state["active"]:
+                yield f"data: {json.dumps({'status': 'error', 'msg': '已有索引任务进行中，请等待完成或取消'})}\n\n"
+                await asyncio.sleep(0)
+                return
+            index_task_state["active"] = True
+            index_task_state["cancel"] = False
+
             # 获取项目根目录
             project_root = get_project_root()
             
-            # 初始化系统
+            # 初始化系统（嵌入模型/向量库首次加载很重，放线程池避免阻塞事件循环）
             sm = SystemManager.get_instance()
             embedder = await asyncio.to_thread(sm.get_embedding_model)
             store = await asyncio.to_thread(sm.get_vector_store)
@@ -191,7 +201,12 @@ async def index_folder(request: dict):
             skipped_count = 0
             
             # 处理每个文件
+            cancelled = False
             for i, file_path in enumerate(files_to_process):
+                # 取消请求：在当前文件处理完成后于文件边界生效
+                if index_task_state["cancel"]:
+                    cancelled = True
+                    break
                 try:
                     file_name = os.path.basename(file_path)
                     current = i + 1
@@ -202,7 +217,12 @@ async def index_folder(request: dict):
                     if should_process:
                         # 处理文件并生成向量
                         try:
-                            # 处理文件内容
+                            # 逐文件日志：标明当前正在处理哪个文件（大文件/LLM 描述可能耗时数分钟）
+                            print(f"→ 处理中: {file_name} ({current}/{total_files})")
+                            # 开工事件：顶部显示“正在处理: 当前文件”
+                            yield f"data: {json.dumps({'status': 'processing', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'正在处理: {file_name}'})}\n\n"
+                            await asyncio.sleep(0)
+                            # 处理文件内容（解析耗时长，放线程池）
                             result = await asyncio.to_thread(processor.process_file, file_path)
                             
                             if "error" in result:
@@ -240,10 +260,10 @@ async def index_folder(request: dict):
                                     processed_count += 1
                                     
                                     # 控制台输出
-                                    print(f"✓ 已处理: {file_name} ({len(chunks)} 个分块, {current}/{total_files})")
+                                    print(f"    ✓ 已处理: {file_name} ({len(chunks)} 个分块, {current}/{total_files})")
                                     
-                                    # 发送进度事件
-                                    yield f"data: {json.dumps({'status': 'progress', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'msg': f'已处理: {file_name} ({len(chunks)} 个分块)'})}\n\n"
+                                    # 完成事件：不带 msg（顶部保持“正在处理”），last_done 供左下角显示
+                                    yield f"data: {json.dumps({'status': 'progress', 'current': current, 'total': total_files, 'file': file_name, 'percent': percent, 'last_done': file_name})}\n\n"
                                     await asyncio.sleep(0.01)  # 小延迟让进度更可见
                                 else:
                                     # 文件没有内容
@@ -281,10 +301,16 @@ async def index_folder(request: dict):
                 yield f"data: {json.dumps({'status': 'error', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': f'保存失败: {str(save_error)}'})}\n\n"
                 await asyncio.sleep(0)
 
-            # 记录已索引的文件夹
+            # 记录已索引的文件夹（取消时已处理的文件同样保留，下次增量续传）
             if processed_count > 0:
-                folders_manager.add_folder(folder_path)
-            
+                folders_manager.add_folder(folder_path, complete=not cancelled)
+
+            if cancelled:
+                done_count = processed_count + skipped_count
+                yield f"data: {json.dumps({'status': 'cancelled', 'current': done_count, 'total': total_files, 'percent': int((done_count / total_files) * 100), 'msg': f'索引已取消，已保存 {processed_count} 个文件的部分结果'})}\n\n"
+                await asyncio.sleep(0)
+                return
+
             # 发送完成事件
             completion_msg = f'索引完成！處理了 {processed_count} 個文件，跳過了 {skipped_count} 個文件'
             print(f"🎉 {completion_msg}")
@@ -306,7 +332,11 @@ async def index_folder(request: dict):
             # 发送致命错误
             yield f"data: {json.dumps({'status': 'fatal', 'current': 0, 'total': 0, 'percent': 0, 'msg': f'致命錯誤: {str(e)}'})}\n\n"
             await asyncio.sleep(0)
-    
+        finally:
+            # 无论正常结束、取消、致命错误还是客户端断开，都复位任务状态
+            index_task_state["active"] = False
+            index_task_state["cancel"] = False
+
     return StreamingResponse(
         event_generator(), 
         media_type="text/event-stream",
@@ -319,3 +349,11 @@ async def index_folder(request: dict):
             "X-Accel-Buffering": "no"
         }
     )
+
+@router.post("/api/index_cancel")
+def index_cancel():
+    """请求取消当前索引任务（当前文件处理完成后在文件边界生效并保存部分结果）"""
+    if not index_task_state["active"]:
+        return {"success": False, "message": "当前没有进行中的索引任务"}
+    index_task_state["cancel"] = True
+    return {"success": True, "message": "取消信号已发送，当前文件处理完成后停止并保存"}
