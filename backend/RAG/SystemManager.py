@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import Optional, Union
 
 from backend.utils.path_utils import get_embedding_models_path, get_llm_models_path, get_data_path
@@ -30,6 +31,7 @@ class SystemManager:
         self.index_storage: Optional[IndexStorage] = None
         self.index_writer: Optional[IndexWriter] = None
         self.llm: Optional[LLMType] = None  # 统一 LLM 实例（本地或 DeepSeek）
+        self._llm_lock = threading.Lock()  # 防止预加载线程与手动加载并发时重复建模型
         self.current_embedding_model_name: Optional[str] = None
         self.current_llm_provider: Optional[str] = None
         self.current_llm_name: Optional[str] = None
@@ -76,8 +78,8 @@ class SystemManager:
                 print(f"   模型路径: {embedding_model_path}")
                 print(f"   请通过设置页面下载模型")
 
-            # 不自动加载 LLM（避免启动慢）
-            print("✅ 启动检查完成（LLM 将在首次使用时加载）")
+            # LLM 由 server 启动流程同步加载（见 server.on_startup）
+            print("✅ 启动检查完成（LLM 将在启动流程中同步加载）")
         except Exception as e:
             print(f"❌ 启动检查失败: {e}")
 
@@ -152,47 +154,50 @@ class SystemManager:
     def load_llm(self, model_name: str | None = None, force: bool = False):
         """
         加载 LLM 模型（本地或 DeepSeek API）
+        全程持锁：预加载线程与手动加载并发时，后到者等待并在锁内命中缓存，
+        避免两个模型同时加载进显存
         """
-        settings = settings_manager.load()
-        llm_provider = settings.get("llm_provider", "local")
+        with self._llm_lock:
+            settings = settings_manager.load()
+            llm_provider = settings.get("llm_provider", "local")
 
-        # 如果指定了 model_name，说明是本地模型
-        if model_name:
-            llm_provider = "local"
+            # 如果指定了 model_name，说明是本地模型
+            if model_name:
+                llm_provider = "local"
 
-        if llm_provider == "deepseek":
-            api_key = settings.get("deepseek_api_key", "")
-            if not api_key:
-                print("⚠️ 未配置 DeepSeek API Key")
-                return None
+            if llm_provider == "deepseek":
+                api_key = settings.get("deepseek_api_key", "")
+                if not api_key:
+                    print("⚠️ 未配置 DeepSeek API Key")
+                    return None
 
-            if not force and isinstance(self.llm, DeepSeekLLM):
+                if not force and isinstance(self.llm, DeepSeekLLM):
+                    return self.llm
+
+                print(f"🤖 初始化 DeepSeek API...")
+                self.llm = DeepSeekLLM(api_key=api_key)
+                self.current_llm_provider = "deepseek"
+                self.current_llm_name = "deepseek-chat"
+                print(f"✅ DeepSeek API 初始化成功")
                 return self.llm
 
-            print(f"🤖 初始化 DeepSeek API...")
-            self.llm = DeepSeekLLM(api_key=api_key)
-            self.current_llm_provider = "deepseek"
-            self.current_llm_name = "deepseek-chat"
-            print(f"✅ DeepSeek API 初始化成功")
-            return self.llm
+            else:  # local
+                if model_name is None:
+                    model_name = settings.get("llm_model", "")
 
-        else:  # local
-            if model_name is None:
-                model_name = settings.get("llm_model", "")
+                if not model_name:
+                    print("⚠️ 未配置本地 LLM 模型")
+                    return None
 
-            if not model_name:
-                print("⚠️ 未配置本地 LLM 模型")
-                return None
+                if not force and isinstance(self.llm, LocalLLM) and self.current_llm_name == model_name:
+                    return self.llm
 
-            if not force and isinstance(self.llm, LocalLLM) and self.current_llm_name == model_name:
+                print(f"🤖 加载本地 LLM 模型: {model_name}...")
+                self.llm = LocalLLM(model_name=model_name)
+                self.current_llm_provider = "local"
+                self.current_llm_name = model_name
+                print(f"✅ 本地 LLM 模型 [{model_name}] 加载成功")
                 return self.llm
-
-            print(f"🤖 加载本地 LLM 模型: {model_name}...")
-            self.llm = LocalLLM(model_name=model_name)
-            self.current_llm_provider = "local"
-            self.current_llm_name = model_name
-            print(f"✅ 本地 LLM 模型 [{model_name}] 加载成功")
-            return self.llm
 
     def reload_llm(self, model_name: str | None = None):
         """强制重新加载 LLM"""
@@ -206,6 +211,7 @@ class SystemManager:
 
     def get_llm(self) -> Optional[LLMType]:
         if not self.llm:
+            print("⏳ 正在加载本地 LLM 模型（后台预加载中），加载完成后自动继续...")
             self.load_llm()
         return self.llm
 

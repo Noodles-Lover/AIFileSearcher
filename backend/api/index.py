@@ -136,8 +136,8 @@ async def index_folder(request: dict):
             
             # 初始化系统
             sm = SystemManager.get_instance()
-            embedder = sm.get_embedding_model()
-            store = sm.get_vector_store()
+            embedder = await asyncio.to_thread(sm.get_embedding_model)
+            store = await asyncio.to_thread(sm.get_vector_store)
             processor = FileProcessor()
             
             # 初始化文件缓存
@@ -149,15 +149,19 @@ async def index_folder(request: dict):
             yield f"data: {json.dumps({'status': 'init', 'current': 0, 'total': 0, 'percent': 0, 'msg': '正在初始化系統...'})}\n\n"
             await asyncio.sleep(0)
             
-            # 扫描文件夹
-            files_to_process = []
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if processor.is_supported_file(file_path):
-                        files_to_process.append(file_path)
-                if not include_subfolders:
-                    break
+            # 扫描文件夹（大目录遍历放线程池，不阻塞事件循环）
+            def _scan_files():
+                found = []
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        if processor.is_supported_file(file_path):
+                            found.append(file_path)
+                    if not include_subfolders:
+                        break
+                return found
+
+            files_to_process = await asyncio.to_thread(_scan_files)
 
             # 清理已从磁盘消失的文件的旧向量与缓存记录
             missing_files = [
@@ -165,7 +169,7 @@ async def index_folder(request: dict):
                 if not os.path.exists(file_path)
             ]
             if missing_files:
-                writer.remove_files(missing_files)
+                await asyncio.to_thread(writer.remove_files, missing_files)
 
             total_files = len(files_to_process)
             
@@ -199,7 +203,7 @@ async def index_folder(request: dict):
                         # 处理文件并生成向量
                         try:
                             # 处理文件内容
-                            result = processor.process_file(file_path)
+                            result = await asyncio.to_thread(processor.process_file, file_path)
                             
                             if "error" in result:
                                 # 处理失败
@@ -216,9 +220,9 @@ async def index_folder(request: dict):
                                     # 生成向量嵌入
                                     if embedding_mode == "image":
                                         embedding_inputs = result.get("embedding_inputs", [])
-                                        embeddings = embedder.encode_images(embedding_inputs)
+                                        embeddings = await asyncio.to_thread(embedder.encode_images, embedding_inputs)
                                     else:
-                                        embeddings = embedder.encode(chunks)
+                                        embeddings = await asyncio.to_thread(embedder.encode, chunks)
                                     
                                     # 准备元数据
                                     metas = []
@@ -232,7 +236,7 @@ async def index_folder(request: dict):
                                         metas.append(metadata)
                                     
                                     # 替换该文件的全部向量（先删旧，再写新）
-                                    writer.write_file(file_path, embeddings, metas)
+                                    await asyncio.to_thread(writer.write_file, file_path, embeddings, metas)
                                     processed_count += 1
                                     
                                     # 控制台输出
@@ -270,7 +274,7 @@ async def index_folder(request: dict):
             
             # 保存向量数据库与文件缓存（原子写，同代落盘）
             try:
-                writer.save()
+                await asyncio.to_thread(writer.save)
                 yield f"data: {json.dumps({'status': 'saving', 'current': total_files, 'total': total_files, 'percent': 100, 'msg': '正在保存向量数据库...'})}\n\n"
                 await asyncio.sleep(0)
             except Exception as save_error:

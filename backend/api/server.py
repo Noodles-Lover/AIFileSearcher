@@ -27,7 +27,14 @@ def on_startup():
     print("=" * 50)
     print("🚀 启动 AI File Searcher 后端服务")
     print("=" * 50)
-    SystemManager.get_instance()
+    sm = SystemManager.get_instance()
+
+    # 同步预加载 LLM（按 settings 配置）：uvicorn 在 startup 事件完成后才开始
+    # 处理请求，加载完成前服务不对外，避免运行途中各处等待加载
+    try:
+        sm.load_llm()
+    except Exception as e:
+        print(f"⚠️ LLM 预加载失败（首次使用时会重试）: {e}")
 
 
 @app.get("/")
