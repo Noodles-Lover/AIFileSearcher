@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -13,12 +13,26 @@ class LocalLLM:
     prompt -> text generation.
     """
 
-    def __init__(self, model_name: str, device: str | None = None, trust_remote_code: bool = True):
+    def __init__(
+        self,
+        model_name: str,
+        device: str | None = None,
+        trust_remote_code: bool = True,
+        progress_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ):
         self.model_name = model_name
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.trust_remote_code = trust_remote_code
         self.model_path = self._resolve_model_path(model_name)
 
+        def _report(stage: str, msg: str):
+            if progress_cb:
+                try:
+                    progress_cb({"status": "loading", "stage": stage, "msg": msg})
+                except Exception:
+                    pass
+
+        _report("tokenizer", "正在加载分词器...")
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_path,
             trust_remote_code=trust_remote_code,
@@ -35,11 +49,13 @@ class LocalLLM:
         else:
             model_kwargs["dtype"] = torch.float32
 
+        _report("weights", "正在加载模型权重（可能需要几分钟）...")
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             **model_kwargs,
         )
 
+        _report("device", "正在将模型加载到运行设备...")
         if self.device != "cuda":
             self.model.to(self.device)
 

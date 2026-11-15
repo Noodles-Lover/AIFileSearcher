@@ -1,6 +1,10 @@
+import asyncio
+import json
+import threading
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from backend.RAG.SystemManager import SystemManager
 from backend.utils.settings_manager import settings_manager
@@ -58,47 +62,77 @@ def get_llm_models():
 
 
 @router.post("/api/llm/load")
-def load_llm(request: Dict[str, Any]):
-    provider = (request.get("provider") or "local").strip()
-    model_name = (request.get("model_name") or "").strip()
-    device = (request.get("device") or "").strip() or None
+async def load_llm(request: Dict[str, Any]):
+    """加载 LLM 模型（SSE 进度反馈）
 
-    try:
-        sm = SystemManager.get_instance()
-        
-        if provider == "deepseek":
-            # DeepSeek API 模式，不加载本地模型
-            sm.reload_llm()  # 使用 settings 中的 api_key
-            settings_manager.save({
-                "llm_provider": "deepseek",
-                "llm_model": model_name or "deepseek-chat",
-            })
-            return {
-                "success": True,
-                "provider": "deepseek",
-                "model_name": "deepseek-chat",
-                "status": "loaded",
-                "message": "DeepSeek API 初始化成功",
-            }
-        else:
-            # 本地模型模式
-            if not model_name:
-                raise HTTPException(status_code=400, detail="model_name is required for local LLM")
-            
-            sm.reload_llm(model_name=model_name)
-            settings_manager.save({
-                "llm_provider": "local",
-                "llm_model": model_name,
-            })
-            return {
-                "success": True,
-                "provider": "local",
-                "model_name": model_name,
-                "status": "loaded",
-                "message": f"本地 LLM 模型 [{model_name}] 加载成功",
-            }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    body 可为空：provider/model_name 缺省时按 settings 配置加载（前端启动自动触发）。
+    force=True 时强制重载（设置页手动切换模型）。
+    """
+    provider = (request.get("provider") or "").strip()
+    model_name = (request.get("model_name") or "").strip()
+    force = bool(request.get("force", False))
+
+    async def event_generator():
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def progress_cb(item: Dict[str, Any]):
+            loop.call_soon_threadsafe(queue.put_nowait, item)
+
+        def _run():
+            try:
+                sm = SystemManager.get_instance()
+                if not provider:
+                    provider_eff = settings_manager.load().get("llm_provider", "local")
+                else:
+                    provider_eff = provider
+
+                if provider_eff == "deepseek":
+                    progress_cb({"status": "loading", "stage": "api", "msg": "正在初始化 DeepSeek API..."})
+                    sm.load_llm(force=True, progress_cb=progress_cb)
+                    settings_manager.save({
+                        "llm_provider": "deepseek",
+                        "llm_model": model_name or "deepseek-chat",
+                    })
+                else:
+                    if not model_name:
+                        model_name_eff = settings_manager.load().get("llm_model", "")
+                    else:
+                        model_name_eff = model_name
+                    if not model_name_eff:
+                        raise ValueError("未配置本地 LLM 模型，请在设置中选择")
+                    llm = sm.load_llm(model_name=model_name_eff, force=force, progress_cb=progress_cb)
+                    if llm is None:
+                        raise ValueError("LLM 模型加载失败")
+                    settings_manager.save({
+                        "llm_provider": "local",
+                        "llm_model": model_name_eff,
+                    })
+                progress_cb({"status": "complete", "msg": "模型加载完成"})
+            except Exception as e:
+                progress_cb({"status": "error", "msg": str(e)})
+
+        threading.Thread(target=_run, name="llm-load", daemon=True).start()
+
+        while True:
+            item = await queue.get()
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0)
+            if item.get("status") in ("complete", "error"):
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.post("/api/llm/config")

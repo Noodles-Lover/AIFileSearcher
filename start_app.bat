@@ -12,15 +12,15 @@ if not exist "backend\venv" (
     exit /b 1
 )
 
-REM Start frontend dev server (new command prompt window)
+REM Start frontend dev server (cmd /c: the window closes automatically when the dev process stops)
 echo [1/2] Starting frontend dev server...
-start "Frontend Dev Server" cmd /k "cd /d %~dp0frontend && npm run dev"
+start "Frontend Dev Server" cmd /c "cd /d %~dp0frontend && npm run dev"
 
 REM Give frontend some time to start
 echo   Waiting 5 seconds for frontend to start...
 timeout /t 5 /nobreak >nul
 
-REM Start backend application
+REM Start backend application (blocks until the GUI window is closed)
 echo [2/2] Starting backend application...
 cd backend
 call venv\Scripts\python.exe gui\main.py
@@ -31,7 +31,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM GUI closed -> stop the frontend dev server (frees port 5173, its window closes with it)
+echo Stopping frontend dev server...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') do taskkill /F /T /PID %%a >nul 2>&1
+
 cd ..
-echo.
 echo Application exited.
-pause

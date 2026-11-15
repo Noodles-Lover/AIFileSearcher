@@ -39,7 +39,16 @@ class SettingsManager:
         return {**DEFAULT_SETTINGS, **normalized_settings}
 
     def save(self, settings: Dict[str, Any]) -> Dict[str, Any]:
-        merged_settings = {**DEFAULT_SETTINGS, **settings}
+        """保存设置；与现有文件合并，避免局部保存重置未提及的键"""
+        existing: Dict[str, Any] = {}
+        if os.path.exists(self.file_path):
+            try:
+                with open(self.file_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+
+        merged_settings = {**DEFAULT_SETTINGS, **existing, **settings}
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         with open(self.file_path, "w", encoding="utf-8") as f:
             json.dump(merged_settings, f, ensure_ascii=False, indent=2)

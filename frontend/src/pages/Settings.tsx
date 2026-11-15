@@ -25,6 +25,7 @@ import {
 
 import SettingSection from '../components/SettingSection';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
+import { loadLLMStream } from '../utils/llmLoader';
 import { loadSettings, saveSettings } from '../utils/settingsManager';
 
 interface ApiResponse {
@@ -202,13 +203,18 @@ const Settings: React.FC = () => {
     setSettingsSaving(true);
     try {
       message.loading({ content: '正在加载LLM模型...', key: 'llm' });
-      await apiPost(API_ENDPOINTS.LLM_LOAD, { provider: selectedLLMProvider, model_name: modelName });
+      await loadLLMStream(
+        { provider: 'local', model_name: modelName, force: true },
+        (ev) => {
+          if (ev.msg) message.loading({ content: ev.msg, key: 'llm' });
+        },
+      );
       await saveSettings({ llm_model: modelName });
       setSelectedLLMModel(modelName);
       message.success({ content: `LLM模型 [${modelName}] 加载成功`, key: 'llm' });
     } catch (error) {
       console.error('Failed to load LLM model:', error);
-      message.error({ content: '加载LLM模型失败', key: 'llm' });
+      message.error({ content: error instanceof Error ? error.message : '加载LLM模型失败', key: 'llm' });
       const settings = await loadSettings(true);
       setSelectedLLMModel(settings.llm_model);
     } finally {

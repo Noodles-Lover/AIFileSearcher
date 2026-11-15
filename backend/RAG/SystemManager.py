@@ -67,10 +67,12 @@ class SystemManager:
 
             # 检查嵌入模型是否存在
             settings = settings_manager.load()
-            embedding_model_name = settings.get("embedding_model", "bge-m3")
+            embedding_model_name = settings.get("embedding_model", "")
             embedding_model_path = get_embedding_models_path(embedding_model_name)
 
-            if os.path.exists(embedding_model_path):
+            if not embedding_model_name:
+                print("⚠️ 未配置嵌入模型，请在设置页选择后重新启动")
+            elif os.path.exists(embedding_model_path):
                 print(f"📊 发现本地嵌入模型: {embedding_model_name}")
                 self.load_embedding_model()
             else:
@@ -78,8 +80,8 @@ class SystemManager:
                 print(f"   模型路径: {embedding_model_path}")
                 print(f"   请通过设置页面下载模型")
 
-            # LLM 由 server 启动流程同步加载（见 server.on_startup）
-            print("✅ 启动检查完成（LLM 将在启动流程中同步加载）")
+            # LLM 由前端就绪后触发 /api/llm/load 加载（SSE 进度反馈）
+            print("✅ 启动检查完成（LLM 由前端触发加载）")
         except Exception as e:
             print(f"❌ 启动检查失败: {e}")
 
@@ -151,12 +153,28 @@ class SystemManager:
             self.index_writer = IndexWriter(self.vector_store, self.file_cache, self.index_storage)
         return self.index_writer
 
-    def load_llm(self, model_name: str | None = None, force: bool = False):
+    def load_llm(
+        self,
+        model_name: str | None = None,
+        force: bool = False,
+        progress_cb=None,
+    ):
         """
         加载 LLM 模型（本地或 DeepSeek API）
         全程持锁：预加载线程与手动加载并发时，后到者等待并在锁内命中缓存，
         避免两个模型同时加载进显存
+        progress_cb: 可选回调，接收 {"status": "loading", "stage": ..., "msg": ...}
         """
+        def _report(stage: str, msg: str):
+            if progress_cb:
+                try:
+                    progress_cb({"status": "loading", "stage": stage, "msg": msg})
+                except Exception:
+                    pass
+
+        if self._llm_lock.locked():
+            _report("wait", "另一个 LLM 加载任务进行中，等待完成...")
+
         with self._llm_lock:
             settings = settings_manager.load()
             llm_provider = settings.get("llm_provider", "local")
@@ -174,6 +192,7 @@ class SystemManager:
                 if not force and isinstance(self.llm, DeepSeekLLM):
                     return self.llm
 
+                _report("api", "正在初始化 DeepSeek API...")
                 print(f"🤖 初始化 DeepSeek API...")
                 self.llm = DeepSeekLLM(api_key=api_key)
                 self.current_llm_provider = "deepseek"
@@ -193,7 +212,7 @@ class SystemManager:
                     return self.llm
 
                 print(f"🤖 加载本地 LLM 模型: {model_name}...")
-                self.llm = LocalLLM(model_name=model_name)
+                self.llm = LocalLLM(model_name=model_name, progress_cb=progress_cb)
                 self.current_llm_provider = "local"
                 self.current_llm_name = model_name
                 print(f"✅ 本地 LLM 模型 [{model_name}] 加载成功")
