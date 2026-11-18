@@ -4,6 +4,8 @@ import numpy as np
 from typing import Any, List, Union
 from sentence_transformers import SentenceTransformer
 from backend.utils.path_utils import get_embedding_models_path
+from backend.utils.weight_utils import ensure_safetensors
+
 
 class EmbeddingModel:
     """
@@ -31,6 +33,7 @@ class EmbeddingModel:
         if os.path.exists(local_model_path):
             model_path = local_model_path
             print(f"Loading local model: {model_path}")
+            ensure_safetensors(model_path)
         else:
             model_path = model_name
             print(f"Loading remote model: {model_path}")

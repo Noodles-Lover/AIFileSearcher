@@ -10,6 +10,8 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 try:
     from huggingface_hub import snapshot_download
 except ImportError:
@@ -17,6 +19,7 @@ except ImportError:
     print("请先运行 backend\\venv\\Scripts\\pip install huggingface-hub")
     sys.exit(1)
 
+from backend.utils.weight_utils import ensure_safetensors
 
 
 def download_model(model_id, local_dir):
@@ -30,6 +33,14 @@ def download_model(model_id, local_dir):
             local_dir_use_symlinks=False,
             resume_download=True,
         )
+        print("\n正在检查模型权重格式...")
+        try:
+            if ensure_safetensors(local_dir, remove_bin=True):
+                print("权重已转换为 safetensors，可以直接在程序中使用。")
+            else:
+                print("模型权重已是 safetensors 格式，可以直接使用。")
+        except Exception as e:
+            print(f"⚠️ 权重转换失败（首次加载时会自动重试）: {e}")
         print(f"\n下载完成，模型已保存到: {local_dir}")
         print("现在可以在程序设置里的模型列表中看到它。")
         return

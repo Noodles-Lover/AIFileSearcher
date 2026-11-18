@@ -9,11 +9,13 @@ class IndexStorage:
 
     保存时先替换 bin、最后替换 state，state 完整存在即代表这一代数据完整；
     加载时校验两者属于同一代，不一致直接报错而不是静默清空。
+    state 记录 embedding_model，模型与索引不匹配时整库失效。
     """
 
-    def __init__(self, index_path: str, state_path: str):
+    def __init__(self, index_path: str, state_path: str, embedding_model: str = ""):
         self.index_path = index_path
         self.state_path = state_path
+        self.embedding_model = embedding_model
 
     def load(self) -> dict:
         """加载数据；全新库返回空数据；文件损坏或两代不一致时抛异常"""
@@ -23,6 +25,16 @@ class IndexStorage:
 
         with open(self.state_path, "r", encoding="utf-8") as f:
             state = json.load(f)
+
+        # 索引由另一个嵌入模型建立时，向量处于不同语义空间，整库失效
+        stored_model = state.get("embedding_model", "")
+        if stored_model and self.embedding_model and stored_model != self.embedding_model:
+            print(f"⚠️ 索引由嵌入模型 [{stored_model}] 建立，当前模型为 [{self.embedding_model}]，索引已失效")
+            return {
+                "index": None, "chunks": {}, "next_id": 0, "files": {}, "index_type": None,
+                "model_mismatch": True,
+            }
+
         index = faiss.read_index(self.index_path)
         chunks = {int(k): v for k, v in state["chunks"].items()}
         files = state.get("files", {})
@@ -51,6 +63,7 @@ class IndexStorage:
         state = {
             "index_type": store.index_type,
             "dimension": store.dimension,
+            "embedding_model": self.embedding_model,
             "next_id": store.next_id,
             "chunks": store.metadata,
             "files": cache.export(),

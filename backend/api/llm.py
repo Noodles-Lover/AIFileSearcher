@@ -6,6 +6,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from backend.api.index import index_task_state
 from backend.RAG.SystemManager import SystemManager
 from backend.utils.settings_manager import settings_manager
 from backend.utils.model_utils import list_local_embedding_models, list_local_llm_models
@@ -33,6 +34,9 @@ def load_embedding_model(request: Dict[str, Any]):
 
     if not model_name:
         raise HTTPException(status_code=400, detail="model_name is required")
+
+    if index_task_state["active"]:
+        raise HTTPException(status_code=409, detail="索引任务进行中，无法切换嵌入模型")
 
     try:
         sm = SystemManager.get_instance()
@@ -88,7 +92,10 @@ async def load_llm(request: Dict[str, Any]):
                     provider_eff = provider
 
                 if provider_eff == "deepseek":
-                    progress_cb({"status": "loading", "stage": "api", "msg": "正在初始化 DeepSeek API..."})
+                    progress_cb({
+                        "status": "loading", "stage": "api", "msg": "正在初始化 DeepSeek API...",
+                        "model": "deepseek-chat",
+                    })
                     sm.load_llm(force=True, progress_cb=progress_cb)
                     settings_manager.save({
                         "llm_provider": "deepseek",

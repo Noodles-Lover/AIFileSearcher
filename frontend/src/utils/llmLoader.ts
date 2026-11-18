@@ -4,6 +4,7 @@ export interface LlmLoadEvent {
   status: 'loading' | 'complete' | 'error';
   stage?: string;
   msg?: string;
+  model?: string;
 }
 
 /** 等待后端服务就绪（startup 期间嵌入模型加载、端口未监听时请求会失败） */

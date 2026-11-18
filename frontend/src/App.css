@@ -51,3 +51,28 @@
 .ant-card {
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02);
 }
+
+/* 消息提示从屏幕底部弹出 */
+.ant-message {
+  top: auto !important;
+  bottom: 24px;
+}
+
+@keyframes app-message-slide-in {
+  from { transform: translate3d(0, 100%, 0); opacity: 0; }
+  to { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+@keyframes app-message-slide-out {
+  from { transform: translate3d(0, 0, 0); opacity: 1; }
+  to { transform: translate3d(0, 100%, 0); opacity: 0; }
+}
+
+.ant-message .ant-message-notice-wrapper.ant-message-move-up-enter,
+.ant-message .ant-message-notice-wrapper.ant-message-move-up-appear {
+  animation-name: app-message-slide-in !important;
+}
+
+.ant-message .ant-message-notice-wrapper.ant-message-move-up-leave {
+  animation-name: app-message-slide-out !important;
+}

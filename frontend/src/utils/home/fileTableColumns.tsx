@@ -32,17 +32,26 @@ export const generateColumns = ({
       ellipsis: true,
       width: '40%',
       render: (text, record) => (
-        <Space orientation="vertical" size={0} style={{ width: '100%' }}>
-          <Space onClick={() => onOpenFile(record.path)} style={{ cursor: 'pointer' }}>
-            <FileIcon record={record} />
-            <Text strong>{text}</Text>
-            {record.score && (
-              <Tag color="green">相似度: {(1 / (1 + record.score)).toFixed(4)}</Tag>
+        <Space orientation="vertical" size={0} style={{ width: '100%', minWidth: 0 }}>
+          <div
+            onClick={() => onOpenFile(record.path)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, cursor: 'pointer' }}
+          >
+            <span style={{ flexShrink: 0 }}><FileIcon record={record} /></span>
+            <Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
+              {text}
+            </Text>
+            {record.score !== undefined && record.score !== null && (
+              <Tag color="green" style={{ flexShrink: 0, marginInlineEnd: 0 }}>
+                相似度: {(1 / (1 + record.score)).toFixed(4)}
+              </Tag>
             )}
             {record.chunk_count && record.chunk_count > 1 && (
-              <Tag color="orange">{record.chunk_count} 个分块</Tag>
+              <Tag color="orange" style={{ flexShrink: 0, marginInlineEnd: 0 }}>
+                {record.chunk_count} 个分块
+              </Tag>
             )}
-          </Space>
+          </div>
           {record.content_preview && (
             <Text
               type="secondary"

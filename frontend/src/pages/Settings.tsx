@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 
 import SettingSection from '../components/SettingSection';
+import { useModelLoading } from '../context/ModelLoadingContext';
 import { API_ENDPOINTS, apiGet, apiPost } from '../utils/api';
 import { loadLLMStream } from '../utils/llmLoader';
 import { loadSettings, saveSettings } from '../utils/settingsManager';
@@ -74,6 +75,7 @@ const styles: Record<string, CSSProperties> = {
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, stopLoading } = useModelLoading();
   const [loading, setLoading] = useState(false);
   const [cacheLoading, setCacheLoading] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -158,23 +160,40 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleEmbeddingModelChange = async (modelName: string) => {
-    setSelectedEmbeddingModel(modelName);
+  const applyEmbeddingModelChange = async (modelName: string) => {
     setSettingsSaving(true);
+    startLoading('嵌入模型', `正在加载 ${modelName}...`);
     try {
-      message.loading({ content: '正在加载嵌入模型...', key: 'embedding' });
       await apiPost(API_ENDPOINTS.EMBEDDING_LOAD, { model_name: modelName });
       await saveSettings({ embedding_model: modelName });
+      await fetchFolders();
       setSelectedEmbeddingModel(modelName);
-      message.success({ content: `嵌入模型 [${modelName}] 加载成功`, key: 'embedding' });
+      message.success({ content: `嵌入模型 [${modelName}] 加载成功，请重新建立索引`, key: 'embedding' });
     } catch (error) {
       console.error('Failed to load embedding model:', error);
-      message.error({ content: '加载嵌入模型失败', key: 'embedding' });
+      message.error({ content: error instanceof Error ? error.message : '加载嵌入模型失败', key: 'embedding' });
       const settings = await loadSettings(true);
       setSelectedEmbeddingModel(settings.embedding_model);
+      await fetchFolders();
     } finally {
+      stopLoading();
       setSettingsSaving(false);
     }
+  };
+
+  const handleEmbeddingModelChange = (modelName: string) => {
+    if (modelName === selectedEmbeddingModel) return;
+    Modal.confirm({
+      title: '切换嵌入模型将清空现有索引',
+      icon: <ExclamationCircleOutlined />,
+      content: '现有向量索引和已索引文件夹记录会被清空，需要重新建立索引后才能搜索。确定继续吗？',
+      okText: '继续切换',
+      cancelText: '取消',
+      onOk: () => {
+        // 先关闭确认弹窗，再由全屏遮罩接管加载反馈
+        void applyEmbeddingModelChange(modelName);
+      },
+    });
   };
 
   const handleLLMProviderChange = async (provider: 'local' | 'deepseek') => {
@@ -201,23 +220,19 @@ const Settings: React.FC = () => {
   const handleLLMModelChange = async (modelName: string) => {
     setSelectedLLMModel(modelName);
     setSettingsSaving(true);
+    startLoading('本地 LLM 模型', `正在加载 ${modelName}...`);
     try {
-      message.loading({ content: '正在加载LLM模型...', key: 'llm' });
-      await loadLLMStream(
-        { provider: 'local', model_name: modelName, force: true },
-        (ev) => {
-          if (ev.msg) message.loading({ content: ev.msg, key: 'llm' });
-        },
-      );
+      await loadLLMStream({ provider: 'local', model_name: modelName, force: true });
       await saveSettings({ llm_model: modelName });
       setSelectedLLMModel(modelName);
-      message.success({ content: `LLM模型 [${modelName}] 加载成功`, key: 'llm' });
+      message.success({ content: `本地 LLM 模型 [${modelName}] 加载成功`, key: 'llm' });
     } catch (error) {
       console.error('Failed to load LLM model:', error);
-      message.error({ content: error instanceof Error ? error.message : '加载LLM模型失败', key: 'llm' });
+      message.error({ content: error instanceof Error ? error.message : '加载本地 LLM 模型失败', key: 'llm' });
       const settings = await loadSettings(true);
       setSelectedLLMModel(settings.llm_model);
     } finally {
+      stopLoading();
       setSettingsSaving(false);
     }
   };
@@ -232,8 +247,8 @@ const Settings: React.FC = () => {
       return;
     }
     setSettingsSaving(true);
+    startLoading('DeepSeek API 模型', '正在初始化 DeepSeek API...');
     try {
-      message.loading({ content: '正在配置 DeepSeek API...', key: 'deepseek' });
       await apiPost(API_ENDPOINTS.LLM_CONFIG, {
         provider: 'deepseek',
         api_key: deepseekApiKey.trim(),
@@ -245,6 +260,7 @@ const Settings: React.FC = () => {
       console.error('Failed to config DeepSeek API:', error);
       message.error({ content: 'DeepSeek API 配置失败', key: 'deepseek' });
     } finally {
+      stopLoading();
       setSettingsSaving(false);
     }
   };
@@ -432,7 +448,7 @@ const Settings: React.FC = () => {
                   <Text strong>嵌入模型</Text>
                   <br />
                   <Text type="secondary" style={styles.secondaryText}>
-                    自动读取 `models/embedding` 文件夹。切换模型后建议重建索引，避免出现兼容性问题。
+                    自动读取 `models/embedding` 文件夹。切换模型会清空现有索引，需重新建立。
                   </Text>
                 </div>
                 <Select

@@ -4,6 +4,7 @@ from typing import Optional, Union
 
 from backend.utils.path_utils import get_embedding_models_path, get_llm_models_path, get_data_path
 from backend.utils.settings_manager import settings_manager
+from backend.utils.IndexedFoldersManager import folders_manager
 
 from .EmbeddingModel import EmbeddingModel
 from .LocalLLM import LocalLLM
@@ -93,10 +94,28 @@ class SystemManager:
             return self.embedding_model
 
         print(f"📊 加载嵌入模型: {model_name}...")
-        self.embedding_model = EmbeddingModel(model_name)
+        new_model = EmbeddingModel(model_name)
+        if self.current_embedding_model_name and self.current_embedding_model_name != model_name:
+            self._invalidate_index_for_model_change(model_name)
+        self.embedding_model = new_model
         self.current_embedding_model_name = model_name
         print(f"✅ 嵌入模型 [{model_name}] 加载成功")
         return self.embedding_model
+
+    def _invalidate_index_for_model_change(self, model_name: str):
+        """切换嵌入模型后，旧向量属于不同语义空间，整库失效"""
+        print(f"🗑️ 嵌入模型切换为 [{model_name}]，清空原有索引与已索引文件夹记录")
+        self.vector_store = None
+        self.file_cache = None
+        self.index_storage = None
+        self.index_writer = None
+        for path in (get_data_path("faiss_index.bin"), get_data_path("index_state.json")):
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError as e:
+                    print(f"⚠️ 无法删除索引文件 {path}: {e}")
+        folders_manager.clear()
 
     def reload_embedding_model(self, model_name: str | None = None):
         """强制重新加载嵌入模型"""
@@ -112,18 +131,22 @@ class SystemManager:
             sample_vector = self.get_embedding_model().encode(["test"])[0]
             dimension = len(sample_vector)
 
+        settings = settings_manager.load()
         self.index_storage = IndexStorage(
             get_data_path("faiss_index.bin"),
             get_data_path("index_state.json"),
+            embedding_model=self.current_embedding_model_name or settings.get("embedding_model", ""),
         )
         try:
             data = self.index_storage.load()
+            if data.get("model_mismatch"):
+                folders_manager.clear()
         except Exception as e:
             print(f"⚠️ 索引数据损坏或不同步: {e}")
             print("   已重置为空索引，请重新建立索引")
             data = {"index": None, "chunks": {}, "next_id": 0, "files": {}, "index_type": None}
 
-        settings_index_type = settings_manager.load().get("index_type", "IndexFlatL2")
+        settings_index_type = settings.get("index_type", "IndexFlatL2")
         index_type = data["index_type"] or settings_index_type
 
         self.vector_store = VectorStore(
@@ -165,10 +188,13 @@ class SystemManager:
         避免两个模型同时加载进显存
         progress_cb: 可选回调，接收 {"status": "loading", "stage": ..., "msg": ...}
         """
-        def _report(stage: str, msg: str):
+        def _report(stage: str, msg: str, model: str | None = None):
             if progress_cb:
                 try:
-                    progress_cb({"status": "loading", "stage": stage, "msg": msg})
+                    payload = {"status": "loading", "stage": stage, "msg": msg}
+                    if model:
+                        payload["model"] = model
+                    progress_cb(payload)
                 except Exception:
                     pass
 
@@ -192,7 +218,7 @@ class SystemManager:
                 if not force and isinstance(self.llm, DeepSeekLLM):
                     return self.llm
 
-                _report("api", "正在初始化 DeepSeek API...")
+                _report("api", "正在初始化 DeepSeek API...", model="deepseek-chat")
                 print(f"🤖 初始化 DeepSeek API...")
                 self.llm = DeepSeekLLM(api_key=api_key)
                 self.current_llm_provider = "deepseek"

@@ -5,6 +5,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from backend.utils.path_utils import get_llm_models_path
+from backend.utils.weight_utils import ensure_safetensors
 
 
 class LocalLLM:
@@ -24,11 +25,16 @@ class LocalLLM:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.trust_remote_code = trust_remote_code
         self.model_path = self._resolve_model_path(model_name)
+        if os.path.isdir(self.model_path):
+            ensure_safetensors(self.model_path)
 
         def _report(stage: str, msg: str):
             if progress_cb:
                 try:
-                    progress_cb({"status": "loading", "stage": stage, "msg": msg})
+                    progress_cb({
+                        "status": "loading", "stage": stage, "msg": msg,
+                        "model": model_name,
+                    })
                 except Exception:
                     pass
 
