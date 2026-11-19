@@ -46,7 +46,7 @@ class EmbeddingModel:
         :param texts: Single string or string list
         :return: Vector list
         """
-        result = self.model.encode(texts, convert_to_numpy=True)
+        result = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
         # Ensure returning list of lists
         if isinstance(result, np.ndarray):
             if result.ndim == 1:
@@ -66,7 +66,7 @@ class EmbeddingModel:
         image_list = images if isinstance(images, list) else [images]
 
         try:
-            result = self.model.encode(image_list, convert_to_numpy=True)
+            result = self.model.encode(image_list, convert_to_numpy=True, normalize_embeddings=True)
         except Exception as exc:
             raise ValueError(
                 "Current embedding model does not support image encoding. "

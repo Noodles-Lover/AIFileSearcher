@@ -234,17 +234,17 @@ def vector_search(q: str, k: int = 30, decay_rate: int = 5,
         print("\n" + "="*50)
         print(f"向量搜索結果 (關鍵詞: '{q}') - 搜索了 {len(chunk_results)} 個分块，合併為 {len(file_results)} 個文件，返回前 {len(final_results)} 個文件")
         print("="*50)
-        print("Score說明: L2距離，數值越小越相似 (0為完全相同)")
-        print("UI轉換: 相似度 = 1/(1+score)，範圍0-1，越接近1越相似")
-        print("文件排序: 按該文件所有分块中的最佳相似度排序")
+        print("Score說明: FAISS 原始得分（L2 系為平方距離、IP 為內積），僅供調試")
+        print("相似度: 統一為餘弦相似度 [-1,1]，越大越相似，由後端按索引類型換算")
+        print("文件排序: 按該文件所有分块中的最佳相似度降序排列")
         print("-"*50)
         for i, res in enumerate(final_results[:console_display_count]):
             score = res.get('score', 0)
-            similarity = 1 / (1 + score)
+            similarity = res['similarity']
             file_path = res.get('file_path', 'Unknown')
             content = res.get('content', '')[:100] + "..."
             chunk_count = res.get('chunk_count', 1)
-            print(f"[{i+1}] L2距離: {score:.4f} | 相似度: {similarity:.4f} | File: {file_path} ({chunk_count}個分块)")
+            print(f"[{i+1}] score: {score:.4f} | 相似度: {similarity:.4f} | File: {file_path} ({chunk_count}個分块)")
             print(f"    Content: {content}")
             print("-" * 30)
         print(f"搜索耗時: {end_time - start_time:.4f}s")
@@ -297,7 +297,7 @@ def get_file_chunks(q: str, file_path: str):
                     chunk_with_content['content'] = chunk_with_content['chunk_text']
                 file_chunks.append(chunk_with_content)
 
-        file_chunks.sort(key=lambda x: x.get('score', float('inf')))
+        file_chunks.sort(key=lambda x: x['similarity'], reverse=True)
 
         print(f"文件分块查询: {file_path} - 找到 {len(file_chunks)} 个匹配分块")
 

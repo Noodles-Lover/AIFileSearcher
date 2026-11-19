@@ -41,9 +41,9 @@ export const generateColumns = ({
             <Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
               {text}
             </Text>
-            {record.score !== undefined && record.score !== null && (
+            {record.similarity !== undefined && record.similarity !== null && (
               <Tag color="green" style={{ flexShrink: 0, marginInlineEnd: 0 }}>
-                相似度: {(1 / (1 + record.score)).toFixed(4)}
+                相似度: {(record.similarity * 100).toFixed(2)}%
               </Tag>
             )}
             {record.chunk_count && record.chunk_count > 1 && (

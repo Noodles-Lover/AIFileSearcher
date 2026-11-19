@@ -50,6 +50,7 @@ export const processSemanticSearchResults = (results: any[], currentPath: string
       extension: `.${item.file_path.split('.').pop() || ''}`,
       type: 'file',
       score: item.score,
+      similarity: item.similarity,
       content_preview: item.content,
       chunk_count: item.chunk_count || 1,
       all_chunks: item.all_chunks || []

@@ -109,6 +109,16 @@ class VectorStore:
             self.metadata.pop(vector_id, None)
         return removed
 
+    def _to_similarity(self, raw_score: float) -> float:
+        """把 FAISS 原始得分换算为统一的余弦相似度 [-1, 1]，均为越大越相似"""
+        if self.index_type == "IndexFlatIP":
+            value = raw_score  # 向量已归一化，内积即余弦相似度
+        elif self.index_type == "IndexLSH":
+            value = 2.0 / (1.0 + max(0.0, raw_score)) - 1.0  # 汉明距离的经验映射
+        else:
+            value = 1.0 - raw_score / 2.0  # 归一化后 d² = 2(1 - cos)
+        return max(-1.0, min(1.0, float(value)))
+
     def search(self, query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
         if self.index.ntotal == 0:
             return []
@@ -132,7 +142,9 @@ class VectorStore:
                 if item is None:
                     continue
                 item = item.copy()
-                item['score'] = float(D[0][i])
+                raw_score = float(D[0][i])
+                item['score'] = raw_score
+                item['similarity'] = self._to_similarity(raw_score)
                 results.append(item)
 
             return results

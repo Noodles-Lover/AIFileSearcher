@@ -307,7 +307,7 @@ const Home: React.FC = () => {
               <div key={index} style={styles.chunkItem}>
                 <div style={styles.chunkTags}>
                   <Tag color="blue">分块 {chunk.chunk_index !== undefined ? chunk.chunk_index + 1 : index + 1}</Tag>
-                  <Tag color="green">相似度: {(1 / (1 + chunk.score)).toFixed(4)}</Tag>
+                  <Tag color="green">相似度: {(chunk.similarity * 100).toFixed(2)}%</Tag>
                 </div>
                 <Text style={styles.chunkText}>{chunk.chunk_text || chunk.content}</Text>
               </div>

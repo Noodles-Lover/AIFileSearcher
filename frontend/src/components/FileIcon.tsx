@@ -23,6 +23,7 @@ export interface FileItem {
   extension: string;
   type: 'file' | 'folder';
   score?: number;
+  similarity?: number;
   content_preview?: string;
   chunk_count?: number;
   all_chunks?: any[];

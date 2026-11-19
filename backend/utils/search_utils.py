@@ -41,21 +41,23 @@ def merge_chunks_by_file(chunk_results: List[Dict[str, Any]]) -> List[Dict[str, 
                 'chunk_count': 0,
                 'chunks': [],
                 'score': float('inf'),
+                'similarity': -1.0,
             }
 
         file_info = file_map[file_path]
         file_info['chunk_count'] += 1
         file_info['chunks'].append(chunk)
 
-        chunk_score = chunk.get('score', float('inf'))
-        if chunk_score < file_info['score']:
-            file_info['score'] = chunk_score
+        chunk_similarity = chunk['similarity']
+        if chunk_similarity > file_info['similarity']:
+            file_info['similarity'] = chunk_similarity
+            file_info['score'] = chunk.get('score', float('inf'))
 
         if 'content' not in file_info and 'chunk_text' in chunk:
             file_info['content'] = chunk.get('chunk_text', '')
 
     result = list(file_map.values())
-    result.sort(key=lambda x: x.get('score', float('inf')))
+    result.sort(key=lambda x: x.get('similarity', -1.0), reverse=True)
     return result
 
 
